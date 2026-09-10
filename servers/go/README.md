@@ -46,8 +46,11 @@ export AWS_ACCESS_KEY_ID=myaccess
 export AWS_SECRET_ACCESS_KEY=mysecret
 export AWS_REGION=us-east-1
 
-./nexus-s3-server
+bin/nexus-s3-server
 # nexus-s3-server listening on :8080 (bucket=nexus-data prefix="chess/" cache=/tmp/nexus-cache)
+
+# or, if you setup your config.yaml (see provided example) you can run
+bin/nexus-s3-server -config config.yaml
 ```
 
 ```bash

@@ -7,6 +7,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/config v1.33.3
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.111.0
 	gonum.org/v1/hdf5 v0.0.0-20210714002203-8c5d23bc6946
+	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (

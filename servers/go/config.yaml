@@ -1,0 +1,11 @@
+s3_bucket: nexus-data
+s3_prefix: chess/
+s3_region: us-east-1
+s3_force_path_style: true
+s3_endpoint: http://127.0.0.1:7070
+port: "8080"
+cache_dir: /tmp/nexus
+field_default_limit: 10000
+field_max_limit: 1000000
+aws_access_key: myaccess
+aws_secret: mysecret
