@@ -28,4 +28,4 @@ require (
 	github.com/aws/smithy-go v1.28.1 // indirect
 )
 
-replace gonum.org/v1/hdf5 => github.com/vkuznet/hdf5 v0.0.1
+replace gonum.org/v1/hdf5 => github.com/CHESSComputing/hdf5 v0.0.1
