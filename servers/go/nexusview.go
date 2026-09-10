@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/vkuznet/gonexus/gonexus"
+	"github.com/CHESSComputing/gonexus/gonexus"
 )
 
 // EntriesResp is the /entries response body.

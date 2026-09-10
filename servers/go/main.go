@@ -31,7 +31,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/vkuznet/gonexus/gonexus"
+	"github.com/CHESSComputing/gonexus/gonexus"
 )
 
 // treeCache avoids re-parsing the same (large) HDF5 file on every request

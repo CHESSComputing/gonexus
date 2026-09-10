@@ -1,4 +1,4 @@
-module github.com/vkuznet/gonexus
+module github.com/CHESSComputing/gonexus
 
 go 1.24
 

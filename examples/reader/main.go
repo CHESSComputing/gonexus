@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/vkuznet/gonexus/gonexus"
+	"github.com/CHESSComputing/gonexus/gonexus"
 )
 
 func main() {

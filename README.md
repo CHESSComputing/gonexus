@@ -49,7 +49,7 @@ below for the specific things that were simplified or left out, and why.
 ## Installation
 
 ```sh
-go get github.com/vkuznet/gonexus
+go get github.com/CHESSComputing/gonexus
 ```
 
 `gonexus` needs a working HDF5 C library (>= 1.8) available at build time,
@@ -78,7 +78,7 @@ export CGO_LDFLAGS="-L$(brew --prefix hdf5)/lib"
 > sandbox it was produced in has neither network access nor an HDF5
 > installation, so it has **not** been compiled here. Before relying on it,
 > run `go build ./...` and the smoke test in `example/` in an environment
-> with HDF5 installed, and adjust `go.mod`'s module path (`github.com/vkuznet/gonexus`)
+> with HDF5 installed, and adjust `go.mod`'s module path (`github.com/CHESSComputing/gonexus`)
 > to match your own repository.
 
 ## Quick start
@@ -92,7 +92,7 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/vkuznet/gonexus/gonexus"
+	"github.com/CHESSComputing/gonexus/gonexus"
 )
 
 func main() {
@@ -127,7 +127,7 @@ import (
 	"log"
 	"math"
 
-	"github.com/vkuznet/gonexus/gonexus"
+	"github.com/CHESSComputing/gonexus/gonexus"
 )
 
 func main() {
