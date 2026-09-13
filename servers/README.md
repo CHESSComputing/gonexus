@@ -94,6 +94,8 @@ Both servers read the same environment variables:
 | `S3_ENDPOINT` | no | AWS default | Custom S3-compatible endpoint, e.g. MinIO |
 | `S3_REGION` / `AWS_REGION` | no | `us-east-1` | S3 region |
 | `S3_FORCE_PATH_STYLE` | no | `false` | Set `true` for most non-AWS S3 (MinIO, etc.) |
+| S3_TLS_INSECURE_SKIP_VERIFY | no | `true` | set `true` to bypass TLS | 
+| S3_TLS_CA_FILE| no | `/path/to/server.crt` | set to certificate path |
 | `NEXUS_CACHE_DIR` | no | `$TMPDIR/nexus-cache` | Local disk cache for downloaded files |
 | `FIELD_DEFAULT_LIMIT` | no | `10000` | Rows returned by `/field` when `limit` isn't given |
 | `FIELD_MAX_LIMIT` | no | `1000000` | Hard cap on `/field`'s `limit` |
@@ -115,6 +117,10 @@ export S3_FORCE_PATH_STYLE=true
 export AWS_ACCESS_KEY_ID=minioadmin
 export AWS_SECRET_ACCESS_KEY=minioadmin
 export AWS_REGION=us-east-1
+
+# to use TLS/HTTPs
+export S3_TLS_INSECURE_SKIP_VERIFY=true   # or 
+export S3_TLS_CA_FILE=/path/to/server.crt
 ```
 
 Then run either server (see `go/README.md` / `py/README.md`).
