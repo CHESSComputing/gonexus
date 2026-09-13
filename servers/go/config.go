@@ -43,6 +43,19 @@ type Config struct {
 	// aws settings
 	AccessKey string // aws_access_key / AWS_ACCESS_KEY_ID (optional)
 	SecretKey string // aws_secret / AWS_SECRET_ACCESS_KEY (optional)
+
+	// TLSInsecureSkipVerify disables certificate verification for
+	// S3_ENDPOINT. Needed for a self-signed cert (e.g. a local VersityGW
+	// or MinIO dev instance) that isn't signed by a CA your system
+	// already trusts. Never enable this against a real AWS endpoint.
+	TLSInsecureSkipVerify bool // S3_TLS_INSECURE_SKIP_VERIFY (default false)
+
+	// TLSCACertFile, if set, is a path to a PEM-encoded CA certificate
+	// (or bundle) to trust in addition to the system roots when talking
+	// to S3_ENDPOINT. This is the safer alternative to
+	// TLSInsecureSkipVerify: point it at the self-signed cert / CA that
+	// signed your S3-compatible server's TLS certificate.
+	TLSCACertFile string // S3_TLS_CA_FILE (optional)
 }
 
 // fileConfig mirrors Config but with pointer fields so we can tell

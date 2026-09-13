@@ -55,6 +55,22 @@ class Store:
         addressing_style = "path" if cfg.force_path_style else "auto"
         boto_kwargs["config"] = BotoConfig(s3={"addressing_style": addressing_style})
 
+        # TLS handling for a self-signed S3_ENDPOINT (e.g. local
+        # VersityGW/MinIO). boto3's `verify` takes either False (skip
+        # verification entirely) or a path to a CA bundle/cert to trust
+        # in addition to the system roots.
+        if cfg.tls_insecure_skip_verify:
+            import logging
+
+            logging.getLogger("nexus-s3-server").warning(
+                "S3_TLS_INSECURE_SKIP_VERIFY is set - TLS certificate verification "
+                "is DISABLED for %s. Only use this against a trusted local/dev endpoint.",
+                cfg.endpoint,
+            )
+            boto_kwargs["verify"] = False
+        elif cfg.tls_ca_file:
+            boto_kwargs["verify"] = cfg.tls_ca_file
+
         self.client = boto3.client("s3", **boto_kwargs)
 
         self._lock = threading.Lock()

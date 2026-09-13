@@ -31,6 +31,12 @@ class Config:
         self.endpoint = os.environ.get("S3_ENDPOINT", "")
         self.force_path_style = _env_bool("S3_FORCE_PATH_STYLE", False)
 
+        # TLS handling for S3_ENDPOINT (e.g. a self-signed cert from a
+        # local VersityGW/MinIO dev instance). Mirrors ../go/config.go's
+        # TLSInsecureSkipVerify / TLSCACertFile.
+        self.tls_insecure_skip_verify = _env_bool("S3_TLS_INSECURE_SKIP_VERIFY", False)
+        self.tls_ca_file = os.environ.get("S3_TLS_CA_FILE", "")
+
         self.cache_dir = os.environ.get(
             "NEXUS_CACHE_DIR", os.path.join(tempfile.gettempdir(), "nexus-cache")
         )

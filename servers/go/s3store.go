@@ -3,10 +3,13 @@ package main
 import (
 	"context"
 	"crypto/sha1"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/hex"
 	"fmt"
 	"io"
 	"log"
+	"net/http"
 	"os"
 	"path/filepath"
 	"sort"
@@ -50,6 +53,15 @@ func newStore(ctx context.Context, cfg *Config) (*Store, error) {
 	loadOpts := []func(*awsconfig.LoadOptions) error{
 		awsconfig.WithRegion(cfg.Region),
 	}
+
+	httpClient, err := buildHTTPClient(cfg)
+	if err != nil {
+		return nil, fmt.Errorf("configuring TLS for S3 endpoint: %w", err)
+	}
+	if httpClient != nil {
+		loadOpts = append(loadOpts, awsconfig.WithHTTPClient(httpClient))
+	}
+
 	awsCfg, err := awsconfig.LoadDefaultConfig(ctx, loadOpts...)
 	if err != nil {
 		return nil, fmt.Errorf("loading AWS config: %w", err)
@@ -69,6 +81,40 @@ func newStore(ctx context.Context, cfg *Config) (*Store, error) {
 		cacheDir: cfg.CacheDir,
 		keyLocks: make(map[string]*sync.Mutex),
 	}, nil
+}
+
+// buildHTTPClient returns a custom *http.Client when the config asks for
+// non-default TLS handling against S3_ENDPOINT (a self-signed cert, as
+// with a local VersityGW or MinIO instance), or nil to let the AWS SDK
+// use its own default client (the normal case for real AWS S3).
+func buildHTTPClient(cfg *Config) (*http.Client, error) {
+	if !cfg.TLSInsecureSkipVerify && cfg.TLSCACertFile == "" {
+		return nil, nil
+	}
+
+	tlsCfg := &tls.Config{}
+
+	if cfg.TLSInsecureSkipVerify {
+		log.Printf("warning: S3_TLS_INSECURE_SKIP_VERIFY is set - TLS certificate verification is DISABLED for %s. Only use this against a trusted local/dev endpoint.", cfg.Endpoint)
+		tlsCfg.InsecureSkipVerify = true
+	} else if cfg.TLSCACertFile != "" {
+		pem, err := os.ReadFile(cfg.TLSCACertFile)
+		if err != nil {
+			return nil, fmt.Errorf("reading S3_TLS_CA_FILE %s: %w", cfg.TLSCACertFile, err)
+		}
+		pool, err := x509.SystemCertPool()
+		if err != nil || pool == nil {
+			pool = x509.NewCertPool()
+		}
+		if !pool.AppendCertsFromPEM(pem) {
+			return nil, fmt.Errorf("no certificates found in S3_TLS_CA_FILE %s", cfg.TLSCACertFile)
+		}
+		tlsCfg.RootCAs = pool
+	}
+
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.TLSClientConfig = tlsCfg
+	return &http.Client{Transport: transport}, nil
 }
 
 // List returns every object under bucket/prefixOverride (falling back to
