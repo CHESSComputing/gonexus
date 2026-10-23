@@ -103,7 +103,7 @@ curl -s "http://localhost:8080/field?key=chess/results.nxs&path=saxs_azimuthal/d
 # { "units": "a.u", "long_name": "Intensity (a.u)" }
 ```
 
-## ⚠️ One real limitation: the 2D `I` field
+## Limitation: the 2D `I` field
 
 `I` is `int64(6587x300)` — a genuine 2D array. Look at `sliceValues` in `nexus.go`:
 
