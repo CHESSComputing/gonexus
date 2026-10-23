@@ -24,11 +24,11 @@ is_running() {
 
 start_service() {
     if is_running; then
-        echo "VersityGW is already running (PID: $(get_pid))"
+        echo "$MSG is already running (PID: $(get_pid))"
         exit 0
     fi
 
-    echo "Starting VersityGW..."
+    echo "Starting $MSG..."
 
     # Run in background detaching stdin/stdout/stderr
     nohup bin/nexus-s3-server -config config.yaml \
