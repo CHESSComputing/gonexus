@@ -2,11 +2,10 @@
 
 # Base configuration
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
-MSG="go nexus-s3-server"
+MSG="gonexus-s3-server"
 
-LOG_FILE="$DIR/vgw.log"
-PID_FILE="$DIR/vgw.pid"
-EXEC_BIN="$DIR/versitygw"
+LOG_FILE="$DIR/$MSG.log"
+PID_FILE="$DIR/$MSG.pid"
 
 get_pid() {
     if [ -f "$PID_FILE" ]; then
