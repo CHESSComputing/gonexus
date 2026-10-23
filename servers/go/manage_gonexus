@@ -23,7 +23,7 @@ is_running() {
     fi
 }
 
-start_service() {                                                                                           [58/
+start_service() {
     if is_running; then
         echo "VersityGW is already running (PID: $(get_pid))"
         exit 0
@@ -49,7 +49,7 @@ start_service() {                                                               
     fi
 }
 
-stop_service() {                                                                                            [32/
+stop_service() {
     if ! is_running; then
         echo "$MSG is not running."
         rm -f "$PID_FILE"
@@ -78,7 +78,7 @@ stop_service() {                                                                
     echo "$MSG killed."
 }
 
-status_service() {                                                                                           [3/
+status_service() {
     if is_running; then
         echo "$MSG is RUNNING (PID: $(get_pid))"
     else
