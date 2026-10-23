@@ -78,7 +78,7 @@ stop_service() {                                                                
     echo "$MSG killed."
 }
 
-status_service() {                                                                                           [3/318]
+status_service() {                                                                                           [3/
     if is_running; then
         echo "$MSG is RUNNING (PID: $(get_pid))"
     else
