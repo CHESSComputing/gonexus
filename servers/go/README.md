@@ -119,3 +119,243 @@ S3_FORCE_PATH_STYLE=true AWS_ACCESS_KEY_ID=test AWS_SECRET_ACCESS_KEY=test \
 
 curl "http://localhost:8080/tree?key=chess/your.nxs"
 ```
+
+---
+
+## Examples using CHESS NeXus file
+
+
+```
+# lookup specific groups in nexus file
+http://foxden-dev.classe.cornell.edu:8080/group?key=chess/results.nxs
+{
+  "key": "chess/results.nxs",
+  "path": "",
+  "class": "NXroot",
+  "attrs": {
+    "HDF5_Version": "1.14.2",
+    "file_name": "/nfs/chess/scratch/user/kls286/saxswaxs_chap/results.nxs",
+    "file_time": "2024-11-05T12:36:50.359295",
+    "h5py_version": "3.11.0"
+  },
+  "children": [
+    {
+      "name": "entry",
+      "type": "group",
+      "class": "NXentry"
+    },
+    {
+      "name": "saxs_azimuthal",
+      "type": "group",
+      "class": "NXprocess"
+    },
+    {
+      "name": "waxs_azimuthal",
+      "type": "group",
+      "class": "NXprocess"
+    }
+  ]
+}
+
+# look-up entries in nexus file
+http://foxden-dev.classe.cornell.edu:8080/entries?key=chess/results.nxs
+{
+  "key": "chess/results.nxs",
+  "root_class": "NXroot",
+  "entries": [
+    {
+      "name": "entry",
+      "type": "group",
+      "class": "NXentry"
+    },
+    {
+      "name": "saxs_azimuthal",
+      "type": "group",
+      "class": "NXprocess"
+    },
+    {
+      "name": "waxs_azimuthal",
+      "type": "group",
+      "class": "NXprocess"
+    }
+  ]
+}
+
+# lookup tree structure of the file
+http://foxden-dev.classe.cornell.edu:8080/tree?key=chess/results.nxs
+
+root:NXroot
+  @file_name = /nfs/chess/scratch/user/kls286/saxswaxs_chap/results.nxs
+  @file_time = 2024-11-05T12:36:50.359295
+  @HDF5_Version = 1.14.2
+  @h5py_version = 3.11.0
+  entry:NXentry
+    data:NXdata
+      diode = float64(6587)
+      ic0 = float64(6587)
+      ic1 = float64(6587)
+      ic1_ni = float64(6587)
+      ic3 = float64(6587)
+      icv_hi = float64(6587)
+      icv_lo = float64(6587)
+      mcs0 = float64(6587)
+      xrfx = float64(6587)
+      xrfz = float64(6587)
+    scan_number = 1
+    spec_file = /nfs/chess/scratch/user/kls286/saxswaxs_chap/space_x_line
+  saxs_azimuthal:NXprocess
+    config = {"tool_type": "integration", "title": "saxs_azimuthal", "integration_type": "azimuthal", "detectors": [{"prefix": "PIL5", "poni_file": "/nfs/chess/auxiliary/reduced_data/cycles/2024-3/id3b/koerner-4187-a/setup/AgBe_10.30.2024.poni", "mask_file": "/nfs/chess/auxiliary/reduced_data/cycles/2024-3/id3b/koerner-4187-a/setup/PIL5_mask.tif", "mask_above": null, "attrs": {}, "shape": [619, 487]}], "radial_units": "q_A^-1", "radial_min": 0.01, "radial_max": 0.05, "radial_npt": 300, "azimuthal_units": "chi_deg", "azimuthal_min": -180.0, "azimuthal_max": 180.0, "azimuthal_npt": 181, "include_errors": true, "right_handed": true, "sequence_index": null}
+    data:NXdata
+      I = int64(6587x300)
+        @units = a.u
+        @long_name = Intensity (a.u)
+      radial = float64(300)
+    date = 2024-11-05T12:36:50.227246
+  waxs_azimuthal:NXprocess
+    config = {"tool_type": "integration", "title": "waxs_azimuthal", "integration_type": "azimuthal", "detectors": [{"prefix": "PIL9", "poni_file": "/nfs/chess/auxiliary/reduced_data/cycles/2024-3/id3b/koerner-4187-a/setup/LaB6_PIL9_10.30.2024.poni", "mask_file": "/nfs/chess/auxiliary/reduced_data/cycles/2024-3/id3b/koerner-4187-a/setup/PIL9_mask.tif", "mask_above": null, "attrs": {}, "shape": [619, 487]}, {"prefix": "PIL11", "poni_file": "/nfs/chess/auxiliary/reduced_data/cycles/2024-3/id3b/koerner-4187-a/setup/LaB6_PIL11_10.30.2024.poni", "mask_file": "/nfs/chess/auxiliary/reduced_data/cycles/2024-3/id3b/koerner-4187-a/setup/PIL11_mask.tif", "mask_above": null, "attrs": {}, "shape": [619, 487]}], "radial_units": "q_A^-1", "radial_min": 0.6, "radial_max": 4.1, "radial_npt": 300, "azimuthal_units": "chi_deg", "azimuthal_min": -180.0, "azimuthal_max": 180.0, "azimuthal_npt": 360, "include_errors": true, "right_handed": true, "sequence_index": null}
+    data:NXdata
+      I = int64(6587x300)
+        @units = a.u
+        @long_name = Intensity (a.u)
+      radial = float64(300)
+    date = 2024-11-05T12:36:50.227660
+
+# fetching specific data
+http://foxden-dev.classe.cornell.edu:8080/field?key=chess/results.nxs&path=/saxs_azimuthal/data/radial
+
+{
+  "key": "chess/results.nxs",
+  "path": "/saxs_azimuthal/data/radial",
+  "dtype": "float64",
+  "shape": [
+    300
+  ],
+  "offset": 0,
+  "count": 300,
+  "total": 300,
+  "truncated": false,
+  "values": [
+    0.01,
+    0.010133779264214047,
+    0.010267558528428094,
+    ...
+    0.05
+  ]
+}
+
+# fetch portion of the data
+http://foxden-dev.classe.cornell.edu:8080/field?key=chess/results.nxs&path=/saxs_azimuthal/data/radial&offset=0&limit=10
+
+{
+  "key": "chess/results.nxs",
+  "path": "/saxs_azimuthal/data/radial",
+  "dtype": "float64",
+  "shape": [
+    300
+  ],
+  "offset": 0,
+  "count": 10,
+  "total": 300,
+  "truncated": true,
+  "values": [
+    0.01,
+    0.010133779264214047,
+    0.010267558528428094,
+    0.010401337792642141,
+    0.010535117056856188,
+    0.010668896321070234,
+    0.01080267558528428,
+    0.010936454849498328,
+    0.011070234113712375,
+    0.011204013377926422
+  ]
+}
+```
+
+Now with this concrete example we can access our data for further analysis
+using the following python client:
+
+```
+import matplotlib.pyplot as plt
+import numpy as np
+import requests
+
+# Server and Dataset details
+BASE_URL = "http://foxden-dev.classe.cornell.edu:8080/field"
+KEY = "chess/results.nxs"
+
+# ---------------------------------------------------------
+# Example A: Fetch a 1D Slice (Radial axis slice)
+# ---------------------------------------------------------
+radial_params = {
+    "key": KEY,
+    "path": "/saxs_azimuthal/data/radial",
+    "offset": 50,  # Start index
+    "limit": 100,  # Fetch 100 points
+}
+
+response = requests.get(BASE_URL, params=radial_params)
+response.raise_for_status()
+data = response.json()
+
+# Convert JSON array directly to a NumPy array with the right data type
+radial_slice = np.array(data["values"], dtype=data["dtype"])
+
+print(f"Radial Slice shape: {radial_slice.shape}")
+print(f"First 5 radial values: {radial_slice[:5]}")
+
+# ---------------------------------------------------------
+# Example B: Fetch a Slice of 2D Intensity Data (I)
+# ---------------------------------------------------------
+# For 2D datasets (shape [6587, 300]), offset/limit pagination fetches array elements
+intensity_params = {
+    "key": KEY,
+    "path": "/saxs_azimuthal/data/I",
+    "offset": 0,
+    "limit": 300,  # Fetch first row/frame (300 intensity values)
+}
+
+resp_I = requests.get(BASE_URL, params=intensity_params)
+resp_I.raise_for_status()
+data_I = resp_I.json()
+
+# Convert intensity slice to NumPy array
+intensity_slice = np.array(data_I["values"], dtype=data_I["dtype"])
+
+print(f"Intensity Slice shape: {intensity_slice.shape}")
+
+# ---------------------------------------------------------
+# Example C: Plotting SAXS Intensity vs. Radial Data
+# ---------------------------------------------------------
+# Fetch full 300 points for matching radial and intensity line slice
+full_radial = requests.get(
+    BASE_URL,
+    params={
+        "key": KEY,
+        "path": "/saxs_azimuthal/data/radial",
+        "offset": 0,
+        "limit": 300,
+    },
+).json()["values"]
+full_I = requests.get(
+    BASE_URL,
+    params={"key": KEY, "path": "/saxs_azimuthal/data/I", "offset": 0, "limit": 300},
+).json()["values"]
+
+q_vec = np.array(full_radial)
+I_vec = np.array(full_I)
+
+plt.figure(figsize=(8, 5))
+plt.plot(q_vec, I_vec, label="Frame 0 (SAXS)")
+plt.xlabel("q (1/Å)")
+plt.ylabel("Intensity (a.u.)")
+plt.title("SAXS Azimuthal Profile")
+plt.yscale("log")
+plt.grid(True)
+plt.legend()
+plt.show()
+```
+
+And, our saxs azimuthal data looks like this:
+![Azimutal_data](../../examples/http/saxs_azimuthal_data.png)
+
