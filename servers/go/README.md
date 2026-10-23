@@ -78,6 +78,21 @@ re-cached under the same path but the in-memory tree for the *old*
 content is simply left to be garbage collected — see the comment on
 `treeCache` for the exact behavior).
 
+## APIs
+gonexus HTTP server provides the following set of end-points to access NeXus
+files:
+
+```
+# HTTP endpoints:
+
+GET /healthz
+GET /files                                  list available NeXus files
+GET /tree?key=...                           full tree, text/plain
+GET /entries?key=...                        top-level NXentry groups
+GET /group?key=...&path=...                 a group's direct children
+GET /field?key=...&path=...&offset=&limit=  a field's metadata + data
+```
+
 ## Tests
 
 There's no bundled test S3 — during development this was verified against
