@@ -273,7 +273,7 @@ http://foxden-dev.classe.cornell.edu:8080/field?key=chess/results.nxs&path=/saxs
 ```
 
 Now with this concrete example we can access our data for further analysis
-using the following python client:
+using the following [python client](../../examples/http/py_client.py):
 
 ```
 import matplotlib.pyplot as plt
