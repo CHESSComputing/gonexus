@@ -1,0 +1,109 @@
+#!/bin/bash
+
+# Base configuration
+DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
+MSG="go nexus-s3-server"
+
+LOG_FILE="$DIR/vgw.log"
+PID_FILE="$DIR/vgw.pid"
+EXEC_BIN="$DIR/versitygw"
+
+get_pid() {
+    if [ -f "$PID_FILE" ]; then
+        cat "$PID_FILE"
+    fi
+}
+
+is_running() {
+    local pid=$(get_pid)
+    if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
+        return 0
+    else
+        return 1
+    fi
+}
+
+start_service() {                                                                                           [58/318]
+    if is_running; then
+        echo "VersityGW is already running (PID: $(get_pid))"
+        exit 0
+    fi
+
+    echo "Starting VersityGW..."
+
+    # Run in background detaching stdin/stdout/stderr
+    nohup bin/nexus-s3-server -config config.yaml \
+        > "$LOG_FILE" 2>&1 < /dev/null &
+
+    local pid=$!
+    echo "$pid" > "$PID_FILE"
+
+    # Quick check if process crashed immediately
+    sleep 1
+    if kill -0 "$pid" 2>/dev/null; then
+        echo "$MSG started successfully (PID: $pid)"
+    else
+        echo "Failed to start $MSG. Check $LOG_FILE for details."
+        rm -f "$PID_FILE"
+        exit 1
+    fi
+}
+
+stop_service() {                                                                                            [32/318]
+    if ! is_running; then
+        echo "$MSG is not running."
+        rm -f "$PID_FILE"
+        return 0
+    fi
+
+    local pid=$(get_pid)
+    echo "Stopping $MSG (PID: $pid)..."
+    kill "$pid"
+
+    # Graceful shutdown wait loop (up to 10 seconds)
+    local timeout=10
+    while [ $timeout -gt 0 ]; do
+        if ! kill -0 "$pid" 2>/dev/null; then
+            echo "$MSG stopped."
+            rm -f "$PID_FILE"
+            return 0
+        fi
+        sleep 1
+        ((timeout--))
+    done
+
+    echo "$MSG did not exit gracefully; forcing shutdown..."
+    kill -9 "$pid" 2>/dev/null
+    rm -f "$PID_FILE"
+    echo "$MSG killed."
+}
+
+status_service() {                                                                                           [3/318]
+    if is_running; then
+        echo "$MSG is RUNNING (PID: $(get_pid))"
+    else
+        echo "$MSG is STOPPED"
+        [ -f "$PID_FILE" ] && echo "Warning: Stale PID file exists at $PID_FILE"
+    fi
+}
+
+case "$1" in
+    start)
+        start_service
+        ;;
+    stop)
+        stop_service
+        ;;
+    restart)
+        stop_service
+        sleep 1
+        start_service
+        ;;
+    status)
+        status_service
+        ;;
+    *)
+        echo "Usage: $0 {start|stop|restart|status}"
+        exit 1
+        ;;
+esac
