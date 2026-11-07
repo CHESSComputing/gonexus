@@ -103,29 +103,51 @@ curl -s "http://localhost:8080/field?key=chess/results.nxs&path=saxs_azimuthal/d
 # { "units": "a.u", "long_name": "Intensity (a.u)" }
 ```
 
-## Limitation: the 2D `I` field
+## 7. Multi-dimensional fields (the 2D `I` field)
 
-`I` is `int64(6587x300)` — a genuine 2D array. Look at `sliceValues` in `nexus.go`:
+`I` is `int64(6587x300)` — a genuine 2D array. gonexus stores every
+multi-dimensional dataset as a **flat slice in row-major (C) order** and keeps
+the real dimensions in `shape`. Consequently `offset` and `limit` always count
+*elements*, not rows, and `total` is the product of all dimensions
+(`6587*300 = 1976100`). `values` is a flat JSON array; use `shape` to
+reshape it on the client.
 
-```go
-func sliceValues(value interface{}, offset, limit int) (interface{}, int, bool, error) {
-	switch v := value.(type) {
-	case []float64:
-		return sliceGeneric(v, offset, limit)
-	...
-	default:
-		// Fall back ... report it as-is, unsliced
-		return value, 1, false, nil
-	}
+Row `r` of a `rows x cols` array is therefore `offset=r*cols&limit=cols`.
+For `I` (`cols = 300`):
+
+```bash
+# first frame/row (elements 0..299)
+curl -s "http://localhost:8080/field?key=chess/results.nxs&path=saxs_azimuthal/data/I&offset=0&limit=300"
+
+# row 10 (elements 3000..3299)
+curl -s "http://localhost:8080/field?key=chess/results.nxs&path=saxs_azimuthal/data/I&offset=3000&limit=300"
+
+# rows 100..199 as one block (30000 elements), reshape with shape [100, 300]
+curl -s "http://localhost:8080/field?key=chess/results.nxs&path=saxs_azimuthal/data/I&offset=30000&limit=30000"
+```
+```json
+{
+  "key": "chess/results.nxs",
+  "path": "saxs_azimuthal/data/I",
+  "dtype": "int64",
+  "shape": [6587, 300],
+  "units": "a.u",
+  "offset": 0,
+  "count": 300,
+  "total": 1976100,
+  "truncated": true,
+  "values": [ ... 300 numbers ... ]
 }
 ```
 
-`gonexus` likely represents a 2D `int64` array as `[][]int64` (or a flat `[]int64` with `Shape: [6587,300]` — depends on the library), and neither matches any case in that switch. So a request like:
+Notes:
 
-```bash
-curl -s "http://localhost:8080/field?key=chess/results.nxs&path=saxs_azimuthal/data/I&limit=10"
-```
-
-silently ignores `offset`/`limit` and dumps the **entire** 6587×300 array (≈2M ints) in one response, with `"total": 1` — which is both misleading and a potential memory/latency problem for bigger scans.
-
-If you want, I can add proper row-based pagination for 2D fields (e.g. `offset`/`limit` slicing over the first axis, so `I&offset=0&limit=100` returns 100 rows of 300 columns each) — just say the word and I'll patch `sliceValues`/`buildField` accordingly.
+* If `limit` is omitted the server uses `FIELD_DEFAULT_LIMIT` (10000 elements
+  by default), i.e. only the first ~33 rows of `I`. `limit` is capped by
+  `FIELD_MAX_LIMIT`.
+* Scalars (`shape` absent) ignore `offset`/`limit` and return `"total": 1`.
+* Supported element types are `float32/64`, `int8/16/32/64`,
+  `uint8/16/32/64`, `string` and `bool`; `uint8` data are returned as plain
+  numbers (not base64).
+* In Python: `np.array(resp["values"], dtype=resp["dtype"]).reshape(resp["shape"])`
+  (when the whole array, or a whole number of rows, was fetched).
