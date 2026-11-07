@@ -1,6 +1,9 @@
 package main
 
 import (
+	"fmt"
+	"reflect"
+
 	"github.com/CHESSComputing/gonexus/gonexus"
 )
 
@@ -155,59 +158,60 @@ func buildField(key, path string, root *gonexus.NXgroup, offset, limit int) (*Fi
 	resp.Offset = offset
 	resp.Total = total
 	resp.Truncated = truncated
-	switch v := values.(type) {
-	case []float64:
-		resp.Count = len(v)
-	case []int64:
-		resp.Count = len(v)
-	case []string:
-		resp.Count = len(v)
-	case []bool:
-		resp.Count = len(v)
-	}
+	resp.Count = reflect.ValueOf(values).Len()
 	return resp, nil
 }
 
 // sliceValues applies [offset:offset+limit] to a flat slice value of any
-// of the types gonexus.NXfield.Value may hold, returning the slice, the
-// total element count, and whether the slice is shorter than the total
-// (i.e. the response is truncated).
+// of the types gonexus.NXfield.Value may hold (see readDatasetValue in
+// gonexus/hdf5io.go: float32/64, int8..int64, uint8..uint64, string and
+// bool), returning the slice, the total element count, and whether the
+// slice is shorter than the total (i.e. the response is truncated).
+//
+// Multi-dimensional datasets are stored flat in row-major (C) order, so
+// offset/limit count elements, e.g. row r of a (rows x cols) array is
+// offset=r*cols&limit=cols.
 func sliceValues(value interface{}, offset, limit int) (interface{}, int, bool, error) {
 	switch v := value.(type) {
 	case []float64:
 		return sliceGeneric(v, offset, limit)
+	case []float32:
+		// Kept as float32 so JSON prints the shortest float32 form
+		// (0.1, not 0.10000000149011612).
+		return sliceGeneric(v, offset, limit)
 	case []int64:
 		return sliceGeneric(v, offset, limit)
 	case []int32:
-		return sliceGeneric(toInt64s(v), offset, limit)
-	case []float32:
-		return sliceGeneric(toFloat64s(v), offset, limit)
+		return sliceGeneric(v, offset, limit)
+	case []int16:
+		return sliceGeneric(v, offset, limit)
+	case []int8:
+		return sliceGeneric(v, offset, limit)
+	case []uint64:
+		return sliceGeneric(v, offset, limit)
+	case []uint32:
+		return sliceGeneric(v, offset, limit)
+	case []uint16:
+		return sliceGeneric(v, offset, limit)
+	case []uint8:
+		// encoding/json renders []byte as a base64 string, so widen the
+		// (already sliced, hence small) window to a numeric slice.
+		out, total, truncated, err := sliceGeneric(v, offset, limit)
+		if err != nil {
+			return nil, 0, false, err
+		}
+		wide := make([]int64, len(out))
+		for i, x := range out {
+			wide[i] = int64(x)
+		}
+		return wide, total, truncated, nil
 	case []string:
 		return sliceGeneric(v, offset, limit)
 	case []bool:
 		return sliceGeneric(v, offset, limit)
 	default:
-		// Fall back to Float64()/Int64() conversion via the field itself
-		// is not available here (we only have the raw value), so just
-		// report it as-is, unsliced, rather than fail outright.
-		return value, 1, false, nil
+		return nil, 0, false, fmt.Errorf("unsupported value type %T for sliced access", value)
 	}
-}
-
-func toInt64s(v []int32) []int64 {
-	out := make([]int64, len(v))
-	for i, x := range v {
-		out[i] = int64(x)
-	}
-	return out
-}
-
-func toFloat64s(v []float32) []float64 {
-	out := make([]float64, len(v))
-	for i, x := range v {
-		out[i] = float64(x)
-	}
-	return out
 }
 
 func sliceGeneric[T any](v []T, offset, limit int) ([]T, int, bool, error) {
