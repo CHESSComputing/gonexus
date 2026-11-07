@@ -14,6 +14,7 @@
 //	GET /entries?key=...                        top-level NXentry groups
 //	GET /group?key=...&path=...                 a group's direct children
 //	GET /field?key=...&path=...&offset=&limit=  a field's metadata + data
+//	GET /ui/                                    interactive web UI (embedded)
 //
 // See ../README.md for configuration (all via environment variables) and
 // full endpoint documentation.
@@ -97,6 +98,7 @@ func main() {
 	mux.HandleFunc("/entries", srv.handleEntries)
 	mux.HandleFunc("/group", srv.handleGroup)
 	mux.HandleFunc("/field", srv.handleField)
+	registerUI(mux) // browser UI at /ui/ (see ui.go)
 
 	httpSrv := &http.Server{
 		Addr:         cfg.Addr,

@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NeXus Browser</title>
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">NeXus<span>Browser</span></div>
+  <div class="filepick">
+    <input id="fileInput" list="fileList" placeholder="Select or type file key, e.g. chess/results.nxs" spellcheck="false" autocomplete="off">
+    <datalist id="fileList"></datalist>
+    <button id="loadBtn" class="btn primary">Open</button>
+    <button id="reloadFiles" class="btn" title="Reload file list">&#8635;</button>
+  </div>
+  <button id="themeBtn" class="btn ghost" title="Toggle light/dark theme" style="font-size:16px">&#9680;</button>
+</header>
+
+<main class="layout" id="layout">
+  <aside class="sidebar">
+    <div class="sidebar-tools">
+      <input id="filterInput" type="search" placeholder="Filter loaded nodes…" spellcheck="false">
+      <button id="expandAll" class="btn small" title="Load and expand every group">Expand all</button>
+      <button id="collapseAll" class="btn small">Collapse</button>
+    </div>
+    <div id="tree" class="tree" role="tree" tabindex="0" aria-label="NeXus tree"></div>
+  </aside>
+  <div class="splitter" id="splitter" title="Drag to resize"></div>
+  <section class="content">
+    <nav class="tabs" id="tabs">
+      <button data-tab="detail" class="active">Details</button>
+      <button data-tab="raw">Raw tree</button>
+    </nav>
+    <div id="detail" class="pane"></div>
+    <div id="raw" class="pane hidden"></div>
+  </section>
+</main>
+<div id="status" class="status"></div>
+<script src="app.js"></script>
+</body>
+</html>
