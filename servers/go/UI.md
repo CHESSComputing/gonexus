@@ -1,5 +1,7 @@
 # NeXus Browser (web UI)
 
+![we UI](../../examples/http/web_ui.png)
+
 Interactive front end for the gonexus HTTP server. It is plain HTML/CSS/JS
 (no build step, no npm, no CDN) embedded into the binary with `go:embed`,
 so the server remains a single executable and works on air-gapped hosts.
