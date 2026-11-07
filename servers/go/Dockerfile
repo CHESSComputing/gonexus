@@ -1,5 +1,5 @@
 # Build stage: compile against the real HDF5 C library (gonexus uses cgo).
-FROM golang:1.22-bookworm AS build
+FROM golang:1.24-bookworm AS build
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libhdf5-dev pkg-config \
     && rm -rf /var/lib/apt/lists/*
