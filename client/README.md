@@ -32,7 +32,7 @@ gonexus-client http://localhost:8081 chess/results.nxs saxs_azimuthal/data/I
 python -m gonexus_client ...                                           # same thing
 ```
 
-See `examples/demo.py` for the full tiled-style session.
+See `examples/demo.py` for the full session example
 
 ## Test
 

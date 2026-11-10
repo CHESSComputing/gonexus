@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """
-gonexus_client - a small, tiled-like Python client for the gonexus HTTP server.
+gonexus_client - a small, Python client for the gonexus HTTP server.
 
     from gonexus_client import from_uri
 
@@ -55,7 +55,6 @@ class _Transport:
         self.timeout = timeout
         self.headers = {"Accept": "application/json"}
         if api_key:
-            # tiled convention; ignored by the stock server, useful behind a proxy
             self.headers["Authorization"] = f"Apikey {api_key}"
         self.session = requests.Session() if requests else None
         if self.session:

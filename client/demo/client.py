@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""gonexus equivalent of the tiled client session."""
+"""gonexus python client session."""
 import os
 from gonexus_client import from_uri
 
