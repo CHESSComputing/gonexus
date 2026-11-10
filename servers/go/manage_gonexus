@@ -86,6 +86,232 @@ status_service() {
     fi
 }
 
+
+info_service() {
+    local pid
+    pid=$(get_pid)
+
+    if ! is_running; then
+        echo "$MSG is not running."
+        [ -f "$PID_FILE" ] && echo "Warning: Stale PID file exists."
+        return 1
+    fi
+
+    # Validate PID before using it in /proc or other commands.
+    if ! [[ "$pid" =~ ^[0-9]+$ ]] || [ "$pid" -le 1 ]; then
+        echo "Invalid PID in $PID_FILE"
+        return 1
+    fi
+
+    local proc="/proc/$pid"
+
+    # Check that /proc entry still exists.
+    if [ ! -d "$proc" ]; then
+        echo "Process $pid no longer exists."
+        return 1
+    fi
+
+    local mib=1048576
+
+    echo
+    echo "=================================================="
+    echo " Service information: $MSG"
+    echo "=================================================="
+
+    echo
+    echo "--- Process ---"
+
+    if command -v ps >/dev/null 2>&1; then
+        ps -p "$pid" \
+            -o pid=,ppid=,user=,stat=,etime=,nlwp=,comm=,args=
+    else
+        echo "ps is not available"
+    fi
+
+    echo
+    echo "--- CPU ---"
+
+    # Measure CPU consumption over a one-second interval.
+    if command -v getconf >/dev/null 2>&1 && [ -r "$proc/stat" ]; then
+        local hz cpu_before cpu_after cpu_usage
+
+        hz=$(getconf CLK_TCK)
+
+        cpu_before=$(awk '{sub(/^.*\) /,""); print $12+$13}' "$proc/stat")
+
+        sleep 1
+
+        if [ -r "$proc/stat" ]; then
+            cpu_after=$(awk '{sub(/^.*\) /,""); print $12+$13}' "$proc/stat")
+
+            cpu_usage=$(awk \
+                -v before="$cpu_before" \
+                -v after="$cpu_after" \
+                -v hz="$hz" \
+                'BEGIN {
+                    if (after >= before)
+                        printf "%.2f", (after-before)*100/hz
+                    else
+                        print "N/A"
+                }')
+
+            echo "CPU usage (1 sec average): ${cpu_usage}%"
+            echo "Note: 100% represents one fully utilized CPU core."
+        fi
+    fi
+
+    # Lifetime-average CPU and current memory information.
+    if command -v ps >/dev/null 2>&1; then
+        ps -p "$pid" -o %cpu=,%mem= | awk '{
+            printf "CPU average since start: %s%%\n", $1
+            printf "Memory (%MEM): %s%%\n", $2
+        }'
+    fi
+
+    echo
+    echo "--- Memory ---"
+
+    if [ -r "$proc/status" ]; then
+        awk -v mib="$mib" '
+            /^VmPeak:/ {printf "Peak virtual memory: %.2f MB\n", $2/1024}
+            /^VmSize:/ {printf "Virtual memory:      %.2f MB\n", $2/1024}
+            /^VmRSS:/  {printf "Resident memory:     %.2f MB\n", $2/1024}
+            /^VmData:/ {printf "Data segment:        %.2f MB\n", $2/1024}
+            /^VmStk:/  {printf "Stack:               %.2f MB\n", $2/1024}
+            /^VmSwap:/ {printf "Swap:                %.2f MB\n", $2/1024}
+            /^Threads:/ {printf "Threads:             %s\n", $2}
+        ' "$proc/status"
+    fi
+
+    # PSS provides proportional accounting of shared memory.
+    if [ -r "$proc/smaps_rollup" ]; then
+        echo
+        echo "Memory accounting (smaps_rollup):"
+
+        awk '
+            /^Rss:/             {printf "  RSS:           %.2f MB\n", $2/1024}
+            /^Pss:/             {printf "  PSS:           %.2f MB\n", $2/1024}
+            /^Private_Clean:/   {printf "  Private clean: %.2f MB\n", $2/1024}
+            /^Private_Dirty:/   {printf "  Private dirty: %.2f MB\n", $2/1024}
+            /^Shared_Clean:/    {printf "  Shared clean:  %.2f MB\n", $2/1024}
+            /^Shared_Dirty:/    {printf "  Shared dirty:  %.2f MB\n", $2/1024}
+            /^Swap:/            {printf "  Swap:          %.2f MB\n", $2/1024}
+        ' "$proc/smaps_rollup"
+    else
+        echo "smaps_rollup unavailable"
+    fi
+
+    # Optional memory-map summary.
+    if command -v pmap >/dev/null 2>&1; then
+        echo
+        echo "Memory map summary (pmap):"
+
+        pmap -x "$pid" 2>/dev/null |
+            awk '/^total / {
+                printf "  Virtual: %.2f MB | RSS: %.2f MB | Dirty: %.2f MB\n",
+                    $2/1024, $3/1024, $4/1024
+            }'
+    fi
+
+    echo
+    echo "--- Disk I/O ---"
+
+    if [ -r "$proc/io" ]; then
+        awk -v mib="$mib" '
+            /^rchar:/  {printf "Bytes read:    %.2f MB\n", $2/mib}
+            /^wchar:/  {printf "Bytes written: %.2f MB\n", $2/mib}
+            /^read_bytes:/  {printf "Disk read:     %.2f MB\n", $2/mib}
+            /^write_bytes:/ {printf "Disk written:  %.2f MB\n", $2/mib}
+            /^cancelled_write_bytes:/ {
+                printf "Cancelled writes: %.2f MB\n", $2/mib
+            }
+        ' "$proc/io"
+    fi
+
+    # Optional I/O rates using pidstat.
+    if command -v pidstat >/dev/null 2>&1; then
+        echo
+        echo "I/O rates (pidstat, one-second sample):"
+
+        LC_ALL=C pidstat -d -p "$pid" 1 1 2>/dev/null |
+            awk -v pid="$pid" '
+                /kB_rd\/s/ {
+                    for (i=1; i<=NF; i++) {
+                        if ($i == "PID") pidcol=i
+                        if ($i == "kB_rd/s") rdcol=i
+                        if ($i == "kB_wr/s") wrcol=i
+                    }
+                    next
+                }
+                pidcol && rdcol && wrcol {
+                    offset=0
+                    if ($1 == "Average:") offset=1
+                    if ($(pidcol+offset) == pid) {
+                        printf "  Read:  %.3f MB/s\n", $(rdcol+offset)/1024
+                        printf "  Write: %.3f MB/s\n", $(wrcol+offset)/1024
+                    }
+                }
+            '
+    fi
+
+    echo
+    echo "--- System ---"
+
+    if [ -r /proc/meminfo ]; then
+        awk '
+            /^MemTotal:/ {
+                printf "Total RAM:     %.2f MB\n", $2/1024
+            }
+            /^MemAvailable:/ {
+                printf "Available RAM: %.2f MB\n", $2/1024
+            }
+            /^SwapTotal:/ {
+                printf "Total swap:    %.2f MB\n", $2/1024
+            }
+            /^SwapFree:/ {
+                printf "Free swap:     %.2f MB\n", $2/1024
+            }
+        ' /proc/meminfo
+    fi
+
+    if command -v nproc >/dev/null 2>&1; then
+        echo "CPU cores: $(nproc)"
+    elif command -v getconf >/dev/null 2>&1; then
+        echo "CPU cores: $(getconf _NPROCESSORS_ONLN)"
+    fi
+
+    echo
+    echo "--- Open files and network ---"
+
+    if command -v lsof >/dev/null 2>&1; then
+        echo "Open file descriptors:"
+
+        local fd_count
+        fd_count=$(find "$proc/fd" -maxdepth 1 -type l 2>/dev/null | wc -l)
+        echo "  $fd_count"
+
+        echo "Network connections:"
+        lsof -nP -a -p "$pid" -i 2>/dev/null | tail -n +2
+    else
+        echo "lsof unavailable; file descriptor count:"
+
+        find "$proc/fd" -maxdepth 1 -type l 2>/dev/null | wc -l
+    fi
+
+    # Optional per-thread CPU inspection.
+    if command -v top >/dev/null 2>&1; then
+        echo
+        echo "--- Top CPU threads ---"
+        top -b -n 1 -H -p "$pid" 2>/dev/null | head -n 15
+    fi
+
+    echo
+    echo "=================================================="
+    echo " End of service information"
+    echo "=================================================="
+}
+
+
 case "$1" in
     start)
         start_service
@@ -101,8 +327,12 @@ case "$1" in
     status)
         status_service
         ;;
+
+   info)
+       info_service
+       ;;
     *)
-        echo "Usage: $0 {start|stop|restart|status}"
+        echo "Usage: $0 {start|stop|restart|status|info}"
         exit 1
         ;;
 esac
