@@ -44,7 +44,7 @@ class Config:
         self.default_field_limit = _env_int("FIELD_DEFAULT_LIMIT", 10_000)
         self.max_field_limit = _env_int("FIELD_MAX_LIMIT", 1_000_000)
 
-        self.port = _env_int("PORT", 8080)
+        self.port = _env_int("PORT", 8081)
         self.host = os.environ.get("HOST", "0.0.0.0")
 
         if not self.bucket:

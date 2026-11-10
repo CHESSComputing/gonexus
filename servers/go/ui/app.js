@@ -1,7 +1,7 @@
 /* NeXus Browser – dependency-free front end for the gonexus HTTP server.
  *
  * Endpoints used:  /files  /group  /field  /tree
- * Optional query parameter  ?api=http://host:8080  points the UI at another
+ * Optional query parameter  ?api=http://host:8081  points the UI at another
  * origin (that server must then allow CORS). Deep links use the URL hash:
  *   #key=chess/results.nxs&path=saxs_azimuthal/data/I
  */

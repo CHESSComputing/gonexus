@@ -12,6 +12,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY servers/py/ .
 
-ENV PORT=8080 HOST=0.0.0.0
-EXPOSE 8080
+ENV PORT=8081 HOST=0.0.0.0
+EXPOSE 8081
 ENTRYPOINT ["python3", "server.py"]

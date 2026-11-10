@@ -5,7 +5,7 @@ import numpy as np
 import requests
 
 # Server and Dataset details
-BASE_URL = "http://foxden-dev.classe.cornell.edu:8080/field"
+BASE_URL = "http://foxden-dev.classe.cornell.edu:8081/field"
 KEY = "chess/results.nxs"
 
 # ---------------------------------------------------------

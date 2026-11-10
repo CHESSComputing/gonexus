@@ -3,7 +3,7 @@ Core of gonexus_client: a small, tiled-like Python client for the gonexus HTTP s
 
     from gonexus_client import from_uri
 
-    client = from_uri("http://localhost:8080")          # api_key=... optional
+    client = from_uri("http://localhost:8081")          # api_key=... optional
     print(list(client))                                  # available NeXus files
     nexus  = client["chess/results.nxs"]                 # a file (root group)
     print(list(nexus))                                   # ['entry', 'saxs_azimuthal', ...]
@@ -427,5 +427,5 @@ class Client(_Mapping):
 
 
 def from_uri(uri: str, api_key: Optional[str] = None, timeout: float = 60.0) -> Client:
-    """Connect to a gonexus server, e.g. from_uri("http://localhost:8080")."""
+    """Connect to a gonexus server, e.g. from_uri("http://localhost:8081")."""
     return Client(uri, api_key=api_key, timeout=timeout)

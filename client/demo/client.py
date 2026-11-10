@@ -4,8 +4,7 @@ import os
 from gonexus_client import from_uri
 
 client = from_uri(
-    os.environ.get("GONEXUS_URI", "http://localhost:8080"),
-    api_key=os.environ.get("GONEXUS_API_KEY"),      # optional
+    os.environ.get("GONEXUS_URI", "http://localhost:8081")
 )
 
 print(client)

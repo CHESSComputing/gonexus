@@ -6,7 +6,7 @@ of results.nxs file):
 ## 1. See what entries exist
 
 ```bash
-curl -s "http://localhost:8080/entries?key=chess/results.nxs"
+curl -s "http://localhost:8081/entries?key=chess/results.nxs"
 ```
 ```json
 {
@@ -23,7 +23,7 @@ curl -s "http://localhost:8080/entries?key=chess/results.nxs"
 Root attrs live on the group itself — pass an empty/omitted `path`:
 
 ```bash
-curl -s "http://localhost:8080/group?key=chess/results.nxs"
+curl -s "http://localhost:8081/group?key=chess/results.nxs"
 ```
 ```json
 {
@@ -43,19 +43,19 @@ curl -s "http://localhost:8080/group?key=chess/results.nxs"
 ## 3. Browse into `entry` and `entry/data`
 
 ```bash
-curl -s "http://localhost:8080/group?key=chess/results.nxs&path=entry"
+curl -s "http://localhost:8081/group?key=chess/results.nxs&path=entry"
 ```
 gives you `data` (NXdata group), `scan_number`, `spec_file`.
 
 ```bash
-curl -s "http://localhost:8080/group?key=chess/results.nxs&path=entry/data"
+curl -s "http://localhost:8081/group?key=chess/results.nxs&path=entry/data"
 ```
 gives you the list of 1D fields (`diode`, `ic0`, `ic1`, `ic1_ni`, `ic3`, `icv_hi`, `icv_lo`, `mcs0`, `xrfx`, `xrfz`), each `float64(6587)`.
 
 ## 4. Pull one field's data (with pagination)
 
 ```bash
-curl -s "http://localhost:8080/field?key=chess/results.nxs&path=entry/data/diode&offset=0&limit=50"
+curl -s "http://localhost:8081/field?key=chess/results.nxs&path=entry/data/diode&offset=0&limit=50"
 ```
 ```json
 {
@@ -75,31 +75,31 @@ Bump `offset`/`limit` (or omit `limit` to use `FIELD_DEFAULT_LIMIT`/`FIELD_MAX_L
 ## 5. Scalar fields (scan_number, spec_file)
 
 ```bash
-curl -s "http://localhost:8080/field?key=chess/results.nxs&path=entry/scan_number"
-curl -s "http://localhost:8080/field?key=chess/results.nxs&path=entry/spec_file"
+curl -s "http://localhost:8081/field?key=chess/results.nxs&path=entry/scan_number"
+curl -s "http://localhost:8081/field?key=chess/results.nxs&path=entry/spec_file"
 ```
 Scalars ignore offset/limit and come back as a single value with `"total": 1`.
 
 ## 6. Processing groups — `saxs_azimuthal` / `waxs_azimuthal`
 
 ```bash
-curl -s "http://localhost:8080/group?key=chess/results.nxs&path=saxs_azimuthal"
+curl -s "http://localhost:8081/group?key=chess/results.nxs&path=saxs_azimuthal"
 ```
 gives you `config`, `data`, `date`.
 
 The `config` field is a JSON-encoded string — fetch it as a scalar and parse client-side:
 ```bash
-curl -s -s "http://localhost:8080/field?key=chess/results.nxs&path=saxs_azimuthal/config" | jq -r '.values' | jq .
+curl -s -s "http://localhost:8081/field?key=chess/results.nxs&path=saxs_azimuthal/config" | jq -r '.values' | jq .
 ```
 
 `radial` is a plain 1D field, works exactly like `diode` above:
 ```bash
-curl -s "http://localhost:8080/field?key=chess/results.nxs&path=saxs_azimuthal/data/radial"
+curl -s "http://localhost:8081/field?key=chess/results.nxs&path=saxs_azimuthal/data/radial"
 ```
 
 Get units/long_name via `attrs` on a field:
 ```bash
-curl -s "http://localhost:8080/field?key=chess/results.nxs&path=saxs_azimuthal/data/I" | jq '.attrs'
+curl -s "http://localhost:8081/field?key=chess/results.nxs&path=saxs_azimuthal/data/I" | jq '.attrs'
 # { "units": "a.u", "long_name": "Intensity (a.u)" }
 ```
 
@@ -117,13 +117,13 @@ For `I` (`cols = 300`):
 
 ```bash
 # first frame/row (elements 0..299)
-curl -s "http://localhost:8080/field?key=chess/results.nxs&path=saxs_azimuthal/data/I&offset=0&limit=300"
+curl -s "http://localhost:8081/field?key=chess/results.nxs&path=saxs_azimuthal/data/I&offset=0&limit=300"
 
 # row 10 (elements 3000..3299)
-curl -s "http://localhost:8080/field?key=chess/results.nxs&path=saxs_azimuthal/data/I&offset=3000&limit=300"
+curl -s "http://localhost:8081/field?key=chess/results.nxs&path=saxs_azimuthal/data/I&offset=3000&limit=300"
 
 # rows 100..199 as one block (30000 elements), reshape with shape [100, 300]
-curl -s "http://localhost:8080/field?key=chess/results.nxs&path=saxs_azimuthal/data/I&offset=30000&limit=30000"
+curl -s "http://localhost:8081/field?key=chess/results.nxs&path=saxs_azimuthal/data/I&offset=30000&limit=30000"
 ```
 ```json
 {

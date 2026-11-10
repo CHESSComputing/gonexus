@@ -99,7 +99,7 @@ Both servers read the same environment variables:
 | `NEXUS_CACHE_DIR` | no | `$TMPDIR/nexus-cache` | Local disk cache for downloaded files |
 | `FIELD_DEFAULT_LIMIT` | no | `10000` | Rows returned by `/field` when `limit` isn't given |
 | `FIELD_MAX_LIMIT` | no | `1000000` | Hard cap on `/field`'s `limit` |
-| `PORT` | no | `8080` | Listen port |
+| `PORT` | no | `8081` | Listen port |
 
 AWS credentials themselves are **not** read from a custom variable —
 both servers use their SDK's normal default credential chain (env vars
@@ -134,7 +134,7 @@ Each sub-directory has its own `Dockerfile`.
 docker build -f servers/go/Dockerfile -t nexus-s3-server-go .
 docker build -f servers/py/Dockerfile -t nexus-s3-server-py .
 
-docker run --rm -p 8080:8080 \
+docker run --rm -p 8081:8081 \
   -e S3_BUCKET=nexus-data -e S3_ENDPOINT=http://host.docker.internal:9000 \
   -e S3_FORCE_PATH_STYLE=true \
   -e AWS_ACCESS_KEY_ID=minioadmin -e AWS_SECRET_ACCESS_KEY=minioadmin \

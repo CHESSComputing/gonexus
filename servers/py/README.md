@@ -19,13 +19,13 @@ export AWS_REGION=us-east-1
 # plus normal AWS credential env vars / profile / instance role
 
 python3 server.py
-# nexus-s3-server listening on 0.0.0.0:8080 (bucket=nexus-data prefix='chess/' cache=/tmp/nexus-cache)
+# nexus-s3-server listening on 0.0.0.0:8081 (bucket=nexus-data prefix='chess/' cache=/tmp/nexus-cache)
 ```
 
 ```bash
-curl http://localhost:8080/healthz
-curl http://localhost:8080/files
-curl "http://localhost:8080/tree?key=chess/edd_test.nxs"
+curl http://localhost:8081/healthz
+curl http://localhost:8081/files
+curl "http://localhost:8081/tree?key=chess/edd_test.nxs"
 ```
 
 The bundled Flask dev server (`app.run(..., threaded=True)`) is fine for
@@ -34,7 +34,7 @@ under a real WSGI server instead, e.g.:
 
 ```bash
 pip install gunicorn
-gunicorn -w 4 -b 0.0.0.0:8080 server:app
+gunicorn -w 4 -b 0.0.0.0:8081 server:app
 ```
 
 (`-w 4` workers each keep their own local disk cache and open-file cache;
@@ -76,5 +76,5 @@ S3_BUCKET=nexus-data S3_ENDPOINT=http://127.0.0.1:5001 \
 S3_FORCE_PATH_STYLE=true AWS_ACCESS_KEY_ID=test AWS_SECRET_ACCESS_KEY=test \
 python3 server.py &
 
-curl "http://localhost:8080/tree?key=chess/your.nxs"
+curl "http://localhost:8081/tree?key=chess/your.nxs"
 ```

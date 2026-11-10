@@ -28,7 +28,7 @@ type Config struct {
 	ForcePathStyle bool   // s3_force_path_style / S3_FORCE_PATH_STYLE
 
 	// Server
-	Port string // port / PORT (default 8080)
+	Port string // port / PORT (default 8081)
 	Addr string // derived: ":" + Port
 
 	// Local disk cache for downloaded NeXus files, since HDF5 requires a
@@ -83,7 +83,7 @@ func loadConfig() (*Config, error) {
 		Region:            firstNonEmpty(os.Getenv("S3_REGION"), os.Getenv("AWS_REGION"), "us-east-1"),
 		Endpoint:          os.Getenv("S3_ENDPOINT"),
 		ForcePathStyle:    envBool("S3_FORCE_PATH_STYLE", false),
-		Port:              firstNonEmpty(os.Getenv("PORT"), "8080"),
+		Port:              firstNonEmpty(os.Getenv("PORT"), "8081"),
 		CacheDir:          firstNonEmpty(os.Getenv("NEXUS_CACHE_DIR"), filepath.Join(os.TempDir(), "nexus-cache")),
 		DefaultFieldLimit: envInt("FIELD_DEFAULT_LIMIT", 10_000),
 		MaxFieldLimit:     envInt("FIELD_MAX_LIMIT", 1_000_000),

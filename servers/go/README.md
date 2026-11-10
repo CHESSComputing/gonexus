@@ -47,16 +47,16 @@ export AWS_SECRET_ACCESS_KEY=mysecret
 export AWS_REGION=us-east-1
 
 bin/nexus-s3-server
-# nexus-s3-server listening on :8080 (bucket=nexus-data prefix="chess/" cache=/tmp/nexus-cache)
+# nexus-s3-server listening on :8081 (bucket=nexus-data prefix="chess/" cache=/tmp/nexus-cache)
 
 # or, if you setup your config.yaml (see provided example) you can run
 bin/nexus-s3-server -config config.yaml
 ```
 
 ```bash
-curl http://localhost:8080/healthz
-curl http://localhost:8080/files
-curl "http://localhost:8080/tree?key=chess/edd_test.nxs"
+curl http://localhost:8081/healthz
+curl http://localhost:8081/files
+curl "http://localhost:8081/tree?key=chess/edd_test.nxs"
 ```
 
 ## Layout
@@ -117,7 +117,7 @@ S3_BUCKET=nexus-data S3_ENDPOINT=http://127.0.0.1:5001 \
 S3_FORCE_PATH_STYLE=true AWS_ACCESS_KEY_ID=test AWS_SECRET_ACCESS_KEY=test \
 ./nexus-s3-server &
 
-curl "http://localhost:8080/tree?key=chess/your.nxs"
+curl "http://localhost:8081/tree?key=chess/your.nxs"
 ```
 
 ---
@@ -127,7 +127,7 @@ curl "http://localhost:8080/tree?key=chess/your.nxs"
 
 ```
 # lookup specific groups in nexus file
-http://foxden-dev.classe.cornell.edu:8080/group?key=chess/results.nxs
+http://foxden-dev.classe.cornell.edu:8081/group?key=chess/results.nxs
 {
   "key": "chess/results.nxs",
   "path": "",
@@ -158,7 +158,7 @@ http://foxden-dev.classe.cornell.edu:8080/group?key=chess/results.nxs
 }
 
 # look-up entries in nexus file
-http://foxden-dev.classe.cornell.edu:8080/entries?key=chess/results.nxs
+http://foxden-dev.classe.cornell.edu:8081/entries?key=chess/results.nxs
 {
   "key": "chess/results.nxs",
   "root_class": "NXroot",
@@ -182,7 +182,7 @@ http://foxden-dev.classe.cornell.edu:8080/entries?key=chess/results.nxs
 }
 
 # lookup tree structure of the file
-http://foxden-dev.classe.cornell.edu:8080/tree?key=chess/results.nxs
+http://foxden-dev.classe.cornell.edu:8081/tree?key=chess/results.nxs
 
 root:NXroot
   @file_name = /nfs/chess/scratch/user/kls286/saxswaxs_chap/results.nxs
@@ -221,7 +221,7 @@ root:NXroot
     date = 2024-11-05T12:36:50.227660
 
 # fetching specific data
-http://foxden-dev.classe.cornell.edu:8080/field?key=chess/results.nxs&path=/saxs_azimuthal/data/radial
+http://foxden-dev.classe.cornell.edu:8081/field?key=chess/results.nxs&path=/saxs_azimuthal/data/radial
 
 {
   "key": "chess/results.nxs",
@@ -244,7 +244,7 @@ http://foxden-dev.classe.cornell.edu:8080/field?key=chess/results.nxs&path=/saxs
 }
 
 # fetch portion of the data
-http://foxden-dev.classe.cornell.edu:8080/field?key=chess/results.nxs&path=/saxs_azimuthal/data/radial&offset=0&limit=10
+http://foxden-dev.classe.cornell.edu:8081/field?key=chess/results.nxs&path=/saxs_azimuthal/data/radial&offset=0&limit=10
 
 {
   "key": "chess/results.nxs",
@@ -281,7 +281,7 @@ import numpy as np
 import requests
 
 # Server and Dataset details
-BASE_URL = "http://foxden-dev.classe.cornell.edu:8080/field"
+BASE_URL = "http://foxden-dev.classe.cornell.edu:8081/field"
 KEY = "chess/results.nxs"
 
 # ---------------------------------------------------------

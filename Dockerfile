@@ -21,6 +21,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=build /out/nexus-s3-server /usr/local/bin/nexus-s3-server
 
-ENV PORT=8080
-EXPOSE 8080
+ENV PORT=8081
+EXPOSE 8081
 ENTRYPOINT ["/usr/local/bin/nexus-s3-server"]

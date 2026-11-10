@@ -23,7 +23,7 @@ servers/go/
 registerUI(mux) // browser UI at /ui/ (see ui.go)
 ```
 
-Then rebuild and open `http://localhost:8080/`.
+Then rebuild and open `http://localhost:8081/`.
 
 ## Features
 
@@ -52,5 +52,5 @@ Then rebuild and open `http://localhost:8080/`.
   string/bool`; other dtypes (`uint8`, `int16`, ...) fall into the
   `default:` branch and are returned whole with `total: 1`, which the UI
   cannot page. Add cases there if you have such fields.
-* To serve the UI from another origin use `/ui/?api=http://host:8080`; the
+* To serve the UI from another origin use `/ui/?api=http://host:8081`; the
   API server must then send CORS headers.

@@ -1,7 +1,7 @@
-"""gonexus_client - tiled-like Python client for the gonexus HTTP server.
+"""gonexus_client - Python client for the gonexus HTTP server.
 
     from gonexus_client import from_uri
-    client = from_uri("http://localhost:8080")
+    client = from_uri("http://localhost:8081")
     data = client["chess/results.nxs"]["saxs_azimuthal/data/I"][10:20]
 """
 from .client import (

@@ -28,7 +28,7 @@ PKG      := .
 REPO_ROOT:= ../..
 
 IMAGE    ?= nexus-s3-server-go
-PORT     ?= 8080
+PORT     ?= 8081
 
 # HDF5 is a cgo dependency of gonexus; its headers/libs often aren't on
 # the default search path, so detect common package managers and point
@@ -98,7 +98,7 @@ docker-build:
 .PHONY: docker-run
 docker-run:
 	@if [ -z "$(S3_BUCKET)" ]; then echo "S3_BUCKET is required, e.g. make docker-run S3_BUCKET=nexus-data"; exit 1; fi
-	docker run --rm -p $(PORT):8080 \
+	docker run --rm -p $(PORT):8081 \
 		-e S3_BUCKET=$(S3_BUCKET) \
 		-e S3_PREFIX=$(S3_PREFIX) \
 		-e S3_ENDPOINT=$(S3_ENDPOINT) \
