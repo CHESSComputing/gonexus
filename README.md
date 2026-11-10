@@ -73,14 +73,6 @@ export CGO_CFLAGS="-I$(brew --prefix hdf5)/include"
 export CGO_LDFLAGS="-L$(brew --prefix hdf5)/lib"
 ```
 
-> **Note on this repository's build status:** this code was written and
-> reviewed against the documented API of `gonum.org/v1/hdf5`, but the
-> sandbox it was produced in has neither network access nor an HDF5
-> installation, so it has **not** been compiled here. Before relying on it,
-> run `go build ./...` and the smoke test in `example/` in an environment
-> with HDF5 installed, and adjust `go.mod`'s module path (`github.com/CHESSComputing/gonexus`)
-> to match your own repository.
-
 ## Quick start
 
 ### Reading a file
