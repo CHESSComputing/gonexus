@@ -12,15 +12,12 @@ COPY gonexus/ ./gonexus/
 COPY servers/go/ ./servers/go/
 RUN go build -o /out/nexus-s3-server ./servers/go/
 
-# Runtime stage. In principle only the shared HDF5 runtime libs (not the
-# -dev headers) are needed here, but the exact runtime package name has
-# shifted across Debian/Ubuntu releases (e.g. libhdf5-103-1 vs
-# libhdf5-103-1t64), so we pull in libhdf5-dev again for a name that's
-# stable across releases; swap in your distro's slimmer runtime package
-# if you want a smaller final image.
+# Runtime stage: Use slim runtime shared libraries instead of -dev headers
 FROM debian:bookworm-slim
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    libhdf5-dev ca-certificates \
+    libhdf5-103-1 \
+    libhdf5-hl-100 \
+    ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=build /out/nexus-s3-server /usr/local/bin/nexus-s3-server
 
