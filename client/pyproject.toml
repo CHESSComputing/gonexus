@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gonexus-client"
+dynamic = ["version"]
+description = "tiled-like Python client for the gonexus NeXus HTTP server"
+readme = "README.md"
+requires-python = ">=3.8"
+license = { text = "MIT" }
+dependencies = ["numpy>=1.20"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Topic :: Scientific/Engineering",
+]
+
+[project.optional-dependencies]
+fast = ["requests>=2.25"]      # HTTP connection re-use (urllib is used otherwise)
+plot = ["matplotlib"]          # only for examples/demo.py
+test = ["pytest"]
+
+[project.scripts]
+gonexus-client = "gonexus_client.cli:main"
+
+[tool.setuptools.dynamic]
+version = { attr = "gonexus_client.__version__" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+gonexus_client = ["py.typed"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
