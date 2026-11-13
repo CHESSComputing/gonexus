@@ -194,7 +194,7 @@ func closeTrees(roots []*gonexus.NXgroup) {
 
 type server struct {
 	cfg   *Config
-	store *Store
+	store FileStore
 	trees *treeCache
 }
 
@@ -205,9 +205,19 @@ func main() {
 	}
 
 	ctx := context.Background()
-	store, err := newStore(ctx, cfg)
-	if err != nil {
-		log.Fatalf("s3 client error: %v", err)
+	var store FileStore
+	source := "s3"
+	if cfg.DataDir != "" {
+		store, err = newLocalStore(cfg)
+		if err != nil {
+			log.Fatalf("local store error: %v", err)
+		}
+		source = "local:" + cfg.DataDir
+	} else {
+		store, err = newStore(ctx, cfg)
+		if err != nil {
+			log.Fatalf("s3 client error: %v", err)
+		}
 	}
 
 	lazyMode, err := gonexus.ParseLazyMode(cfg.LazyMode)
@@ -215,7 +225,7 @@ func main() {
 		log.Fatalf("config error: %v", err)
 	}
 	trees := newTreeCache(gonexus.LoadOptions{Mode: lazyMode, Threshold: cfg.LazyThreshold}, cfg.MaxOpenFiles)
-	store.onFileChanged = trees.invalidate // drop parsed trees of replaced/evicted files
+	store.SetOnFileChanged(trees.invalidate) // drop parsed trees of replaced/evicted/modified files
 	srv := &server{cfg: cfg, store: store, trees: trees}
 
 	mux := http.NewServeMux()
@@ -235,8 +245,8 @@ func main() {
 	}
 
 	go func() {
-		log.Printf("nexus-s3-server listening on %s (bucket=%s prefix=%q cache=%s lazy=%s threshold=%d max_open=%d)",
-			cfg.Addr, cfg.Bucket, cfg.Prefix, cfg.CacheDir, lazyMode, cfg.LazyThreshold, cfg.MaxOpenFiles)
+		log.Printf("nexus-s3-server listening on %s (source=%s bucket=%s prefix=%q cache=%s lazy=%s threshold=%d max_open=%d)",
+			cfg.Addr, source, cfg.Bucket, cfg.Prefix, cfg.CacheDir, lazyMode, cfg.LazyThreshold, cfg.MaxOpenFiles)
 		if err := httpSrv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("server error: %v", err)
 		}

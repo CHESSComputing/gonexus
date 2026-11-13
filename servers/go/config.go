@@ -41,6 +41,13 @@ type Config struct {
 	DefaultFieldLimit int // field_default_limit / FIELD_DEFAULT_LIMIT (default 10000)
 	MaxFieldLimit     int // field_max_limit / FIELD_MAX_LIMIT (default 1000000)
 
+	// DataDir, when set, makes the server read NeXus files directly from
+	// this directory instead of from S3 (see LOCAL.md). Keys are paths
+	// relative to it, symlinks (also to directories) are followed, files
+	// are opened in place with no copy into CacheDir, and the S3 settings
+	// are not used. S3Prefix still selects which keys /files lists.
+	DataDir string // data_dir / NEXUS_DATA_DIR (default "": use S3)
+
 	// Lazy loading of large datasets (see LAZY.md). "off" (default) reads
 	// every dataset into memory when a file is first opened, exactly as
 	// before. "auto" leaves datasets with more than LazyThreshold elements
@@ -94,6 +101,7 @@ type fileConfig struct {
 	CacheDir          *string `json:"cache_dir"             yaml:"cache_dir"`
 	DefaultFieldLimit *int    `json:"field_default_limit"  yaml:"field_default_limit"`
 	MaxFieldLimit     *int    `json:"field_max_limit"      yaml:"field_max_limit"`
+	DataDir           *string `json:"data_dir"             yaml:"data_dir"`
 	LazyMode          *string `json:"lazy"                 yaml:"lazy"`
 	LazyThreshold     *int    `json:"lazy_threshold"       yaml:"lazy_threshold"`
 	MaxOpenFiles      *int    `json:"max_open_files"       yaml:"max_open_files"`
@@ -116,6 +124,7 @@ func loadConfig() (*Config, error) {
 		CacheDir:          firstNonEmpty(os.Getenv("NEXUS_CACHE_DIR"), filepath.Join(os.TempDir(), "nexus-cache")),
 		DefaultFieldLimit: envInt("FIELD_DEFAULT_LIMIT", 10_000),
 		MaxFieldLimit:     envInt("FIELD_MAX_LIMIT", 1_000_000),
+		DataDir:           os.Getenv("NEXUS_DATA_DIR"),
 		LazyMode:          firstNonEmpty(os.Getenv("NEXUS_LAZY"), "off"),
 		LazyThreshold:     envInt("NEXUS_LAZY_THRESHOLD", gonexus.DefaultLazyThreshold),
 		MaxOpenFiles:      envInt("NEXUS_MAX_OPEN_FILES", 8),
@@ -146,8 +155,8 @@ func loadConfig() (*Config, error) {
 		os.Setenv("AWS_SECRET_ACCESS_KEY", cfg.SecretKey)
 	}
 
-	if cfg.Bucket == "" {
-		return nil, errRequiredEnv("S3_BUCKET (or s3_bucket in config file)")
+	if cfg.Bucket == "" && cfg.DataDir == "" {
+		return nil, errRequiredEnv("S3_BUCKET (or s3_bucket in config file), or NEXUS_DATA_DIR (data_dir) to serve a local directory")
 	}
 	if _, err := gonexus.ParseLazyMode(cfg.LazyMode); err != nil {
 		return nil, fmt.Errorf("NEXUS_LAZY / lazy: %w", err)
@@ -238,6 +247,9 @@ func applyFileConfig(cfg *Config, fc *fileConfig) {
 	}
 	if fc.MaxFieldLimit != nil {
 		cfg.MaxFieldLimit = *fc.MaxFieldLimit
+	}
+	if fc.DataDir != nil {
+		cfg.DataDir = *fc.DataDir
 	}
 	if fc.LazyMode != nil {
 		cfg.LazyMode = *fc.LazyMode

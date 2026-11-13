@@ -293,6 +293,11 @@ func (s *Store) Ensure(ctx context.Context, key string) (string, error) {
 	return localPath, nil
 }
 
+// SetOnFileChanged implements FileStore.
+func (s *Store) SetOnFileChanged(fn func(localPath string)) {
+	s.onFileChanged = fn
+}
+
 func (s *Store) recentlyChecked(key string) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
