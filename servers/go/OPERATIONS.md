@@ -26,3 +26,26 @@ overrides environment variables). Lazy loading itself is described in
   warning is logged.
 * **`/field` responses** are now compact JSON (no indentation), roughly a
   third of the previous size for large windows. Other endpoints are unchanged.
+
+---
+
+### Memory footprint
+
+We may use the following commands to obtain and watch memory footprint
+of gonexus server:
+
+```bash
+ps -o rss= -p "$(pgrep -f nexus-s3-server)" | awk '{printf "%.1f MiB\n", $1/1024}'
+```
+
+To watch it change while you test, refresh every 2 seconds:
+
+```bash
+while true; do ps -o rss= -p "$(pgrep -f nexus-s3-server)" | awk '{printf "%s  %.1f MiB\n", strftime("%T"), $1/1024}'; sleep 2; done
+```
+
+On macOS the default awk has no strftime, so use date instead:
+
+```bash
+while true; do echo "$(date +%T)  $(ps -o rss= -p "$(pgrep -f nexus-s3-server)" | awk '{printf "%.1f MiB", $1/1024}')"; sleep 2; done
+```
