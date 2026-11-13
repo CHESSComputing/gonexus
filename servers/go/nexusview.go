@@ -150,6 +150,37 @@ func buildField(key, path string, root *gonexus.NXgroup, offset, limit int) (*Fi
 		return resp, nil
 	}
 
+	if f.Lazy() {
+		// Data are still on disk: read only the requested window, so
+		// memory use is bounded by limit, not by the size of the array.
+		if limit <= 0 {
+			return nil, badRequest("limit must be positive")
+		}
+		total := f.Size()
+		if offset < 0 {
+			offset = 0
+		}
+		if offset > total {
+			offset = total
+		}
+		raw, err := f.ReadSlice(offset, limit)
+		if err != nil {
+			return nil, internal("reading field %q: %v", path, err)
+		}
+		// sliceValues(raw, 0, 0) just applies the dtype switch (e.g.
+		// widening uint8) to the already-small window.
+		values, _, _, err := sliceValues(raw, 0, 0)
+		if err != nil {
+			return nil, badRequest("%v", err)
+		}
+		resp.Values = values
+		resp.Offset = offset
+		resp.Total = total
+		resp.Count = reflect.ValueOf(values).Len()
+		resp.Truncated = offset+resp.Count < total
+		return resp, nil
+	}
+
 	values, total, truncated, err := sliceValues(f.Value, offset, limit)
 	if err != nil {
 		return nil, badRequest("%v", err)

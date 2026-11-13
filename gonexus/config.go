@@ -18,12 +18,13 @@ type Config struct {
 	// and field in the file (true) or only the immediate children of each
 	// group, deferring the rest until first access (false). gonexus always
 	// performs an eager, recursive read (Recursive is effectively true) -
-	// see README for details - but the flag is kept for API compatibility
-	// and future lazy-loading support.
+	// see README for details - but the flag is kept for API compatibility.
+	// Large datasets can be left on disk with LoadWithOptions instead.
 	Recursive bool
-	// MaxSize is the maximum number of elements read into memory
-	// automatically when opening a file; larger fields must be read
-	// explicitly with NXfield.ReadData(). 0 means "no limit".
+	// MaxSize is reserved and currently has no effect. Lazy loading of
+	// large fields is requested per call through LoadWithOptions
+	// (LoadOptions.Mode / LoadOptions.Threshold); lazy fields are read
+	// with NXfield.ReadSlice or NXfield.ReadData.
 	MaxSize int
 }
 

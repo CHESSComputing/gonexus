@@ -26,6 +26,10 @@ type NXfield struct {
 	// Shape is the array shape. A nil or empty Shape means a scalar
 	// field. For 1-D slices, NewField infers Shape automatically.
 	Shape []int
+
+	// lazy is non-nil while the field's data are still on disk (Value is
+	// nil). See LoadWithOptions, ReadSlice and ReadData in lazy.go.
+	lazy *lazySource
 }
 
 // NewField creates an NXfield from a raw Go value, inferring Dtype and
@@ -86,12 +90,18 @@ func (f *NXfield) Scalar() interface{} {
 // underlying numeric type if necessary. It returns an error if the field
 // does not hold numeric data.
 func (f *NXfield) Float64() ([]float64, error) {
+	if err := f.errIfLazy("converting to float64"); err != nil {
+		return nil, err
+	}
 	return toFloat64Slice(f.Value)
 }
 
 // Int64 returns the field's data as a []int64, converting from the
 // underlying integer type if necessary.
 func (f *NXfield) Int64() ([]int64, error) {
+	if err := f.errIfLazy("converting to int64"); err != nil {
+		return nil, err
+	}
 	return toInt64Slice(f.Value)
 }
 
@@ -99,6 +109,9 @@ func (f *NXfield) Int64() ([]int64, error) {
 // as a bracketed list (for arrays), matching Python's NXfield.__repr__ used
 // in tree output.
 func (f *NXfield) String() string {
+	if f.lazy != nil {
+		return fmt.Sprintf("<lazy %s(%s)>", f.Dtype, shapeString(f.Shape))
+	}
 	return formatValue(f.Value)
 }
 
