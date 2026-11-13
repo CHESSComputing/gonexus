@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/CHESSComputing/gonexus/gonexus"
 	"gopkg.in/yaml.v3"
 )
 
@@ -39,6 +40,28 @@ type Config struct {
 	// response unless the caller passes an explicit larger ?limit=.
 	DefaultFieldLimit int // field_default_limit / FIELD_DEFAULT_LIMIT (default 10000)
 	MaxFieldLimit     int // field_max_limit / FIELD_MAX_LIMIT (default 1000000)
+
+	// Lazy loading of large datasets (see LAZY.md). "off" (default) reads
+	// every dataset into memory when a file is first opened, exactly as
+	// before. "auto" leaves datasets with more than LazyThreshold elements
+	// on disk and reads only the requested /field window; "all" does so
+	// for every array dataset. Lazy trees keep their HDF5 file open, so at
+	// most MaxOpenFiles of them are cached (least recently used closed).
+	LazyMode      string // lazy / NEXUS_LAZY: off | auto | all (default off)
+	LazyThreshold int    // lazy_threshold / NEXUS_LAZY_THRESHOLD (default 100000 elements)
+	MaxOpenFiles  int    // max_open_files / NEXUS_MAX_OPEN_FILES (default 8)
+
+	// Large-file operation (see OPERATIONS.md).
+	// WriteTimeoutSeconds bounds how long one response may take to write,
+	// which includes the S3 download triggered by the first request for a
+	// file. 0 disables the limit.
+	WriteTimeoutSeconds int // write_timeout / NEXUS_WRITE_TIMEOUT (default 600)
+	// HeadTTLSeconds: after verifying a cached file against S3 (HEAD), do
+	// not check again for this many seconds. 0 checks on every request.
+	HeadTTLSeconds int // head_ttl / NEXUS_HEAD_TTL (default 30)
+	// CacheMaxBytes caps the total size of CacheDir; the least recently
+	// used files are deleted after a download pushes it over. 0 = no cap.
+	CacheMaxBytes int64 // cache_max_bytes / NEXUS_CACHE_MAX_BYTES (default 0)
 
 	// aws settings
 	AccessKey string // aws_access_key / AWS_ACCESS_KEY_ID (optional)
@@ -71,6 +94,12 @@ type fileConfig struct {
 	CacheDir          *string `json:"cache_dir"             yaml:"cache_dir"`
 	DefaultFieldLimit *int    `json:"field_default_limit"  yaml:"field_default_limit"`
 	MaxFieldLimit     *int    `json:"field_max_limit"      yaml:"field_max_limit"`
+	LazyMode          *string `json:"lazy"                 yaml:"lazy"`
+	LazyThreshold     *int    `json:"lazy_threshold"       yaml:"lazy_threshold"`
+	MaxOpenFiles      *int    `json:"max_open_files"       yaml:"max_open_files"`
+	WriteTimeout      *int    `json:"write_timeout"        yaml:"write_timeout"`
+	HeadTTL           *int    `json:"head_ttl"             yaml:"head_ttl"`
+	CacheMaxBytes     *int64  `json:"cache_max_bytes"      yaml:"cache_max_bytes"`
 	AccessKey         *string `json:"aws_access_key" yaml:"aws_access_key"`
 	SecretKey         *string `json:"aws_secret"     yaml:"aws_secret"`
 }
@@ -87,6 +116,13 @@ func loadConfig() (*Config, error) {
 		CacheDir:          firstNonEmpty(os.Getenv("NEXUS_CACHE_DIR"), filepath.Join(os.TempDir(), "nexus-cache")),
 		DefaultFieldLimit: envInt("FIELD_DEFAULT_LIMIT", 10_000),
 		MaxFieldLimit:     envInt("FIELD_MAX_LIMIT", 1_000_000),
+		LazyMode:          firstNonEmpty(os.Getenv("NEXUS_LAZY"), "off"),
+		LazyThreshold:     envInt("NEXUS_LAZY_THRESHOLD", gonexus.DefaultLazyThreshold),
+		MaxOpenFiles:      envInt("NEXUS_MAX_OPEN_FILES", 8),
+
+		WriteTimeoutSeconds: envInt("NEXUS_WRITE_TIMEOUT", 600),
+		HeadTTLSeconds:      envInt("NEXUS_HEAD_TTL", 30),
+		CacheMaxBytes:       int64(envInt("NEXUS_CACHE_MAX_BYTES", 0)),
 		AccessKey:         os.Getenv("AWS_ACCESS_KEY_ID"),
 		SecretKey:         os.Getenv("AWS_SECRET_ACCESS_KEY"),
 	}
@@ -112,6 +148,27 @@ func loadConfig() (*Config, error) {
 
 	if cfg.Bucket == "" {
 		return nil, errRequiredEnv("S3_BUCKET (or s3_bucket in config file)")
+	}
+	if _, err := gonexus.ParseLazyMode(cfg.LazyMode); err != nil {
+		return nil, fmt.Errorf("NEXUS_LAZY / lazy: %w", err)
+	}
+	if cfg.MaxFieldLimit <= 0 {
+		cfg.MaxFieldLimit = 1_000_000
+	}
+	if cfg.LazyThreshold <= 0 {
+		cfg.LazyThreshold = gonexus.DefaultLazyThreshold
+	}
+	if cfg.MaxOpenFiles <= 0 {
+		cfg.MaxOpenFiles = 8
+	}
+	if cfg.WriteTimeoutSeconds < 0 {
+		cfg.WriteTimeoutSeconds = 600
+	}
+	if cfg.HeadTTLSeconds < 0 {
+		cfg.HeadTTLSeconds = 0
+	}
+	if cfg.CacheMaxBytes < 0 {
+		cfg.CacheMaxBytes = 0
 	}
 	if err := os.MkdirAll(cfg.CacheDir, 0o755); err != nil {
 		return nil, err
@@ -181,6 +238,24 @@ func applyFileConfig(cfg *Config, fc *fileConfig) {
 	}
 	if fc.MaxFieldLimit != nil {
 		cfg.MaxFieldLimit = *fc.MaxFieldLimit
+	}
+	if fc.LazyMode != nil {
+		cfg.LazyMode = *fc.LazyMode
+	}
+	if fc.LazyThreshold != nil {
+		cfg.LazyThreshold = *fc.LazyThreshold
+	}
+	if fc.MaxOpenFiles != nil {
+		cfg.MaxOpenFiles = *fc.MaxOpenFiles
+	}
+	if fc.WriteTimeout != nil {
+		cfg.WriteTimeoutSeconds = *fc.WriteTimeout
+	}
+	if fc.HeadTTL != nil {
+		cfg.HeadTTLSeconds = *fc.HeadTTL
+	}
+	if fc.CacheMaxBytes != nil {
+		cfg.CacheMaxBytes = *fc.CacheMaxBytes
 	}
 	if fc.AccessKey != nil {
 		cfg.AccessKey = *fc.AccessKey

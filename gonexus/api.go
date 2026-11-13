@@ -4,7 +4,8 @@ package gonexus
 // tree of NXgroup/NXfield objects, closes the file, and returns the root
 // NXroot group. mode defaults to "r" (read-only) if omitted; pass "rw" to
 // keep the tree modifiable and re-saveable in place. Equivalent to
-// Python's `nxload(filename, mode)`.
+// Python's `nxload(filename, mode)`. Load always reads all data into
+// memory; for very large files see LoadWithOptions (lazy loading).
 //
 //	root, err := gonexus.Load("scan.nxs")
 //	if err != nil { ... }
@@ -15,6 +16,8 @@ func Load(filename string, mode ...string) (*NXgroup, error) {
 	if len(mode) > 0 {
 		m = mode[0]
 	}
+	h5mu.Lock() // libhdf5 is not assumed to be thread-safe; see lazy.go
+	defer h5mu.Unlock()
 	nf, err := OpenFile(filename, m)
 	if err != nil {
 		return nil, err

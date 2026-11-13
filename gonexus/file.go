@@ -10,8 +10,10 @@ import (
 
 // NXFile wraps an HDF5 file handle and knows how to read/write a NeXus tree
 // (NXgroup/NXfield/NXattr/NXlink) to and from it. It is the Go equivalent
-// of Python's NXFile class, minus file locking and lazy/lower-memory
-// reading - see the package README for the list of intentional differences.
+// of Python's NXFile class, minus file locking - see the package README for the list of
+// intentional differences. Lazy (on-demand) reading of large datasets is
+// opt-in through LoadWithOptions; ReadFile itself reads eagerly unless the
+// file was opened that way.
 //
 // Most callers do not need NXFile directly; use the top-level Load/Save/
 // Open helpers in api.go instead.
@@ -19,6 +21,10 @@ type NXFile struct {
 	Name string
 	mode string // "r" or "rw"
 	h5   *hdf5.File
+
+	// lazy is set by LoadWithOptions before ReadFile; the zero value
+	// (LazyOff) means "read everything eagerly".
+	lazy LoadOptions
 }
 
 // OpenFile opens (or, for write modes, creates) an HDF5/NeXus file. mode is
@@ -204,6 +210,16 @@ func (nf *NXFile) readDataset(ds *hdf5.Dataset, name string) (*NXfield, error) {
 		return nil, err
 	}
 
+	if nf.lazy.Mode != LazyOff {
+		lf, ok, err := nf.tryLazyField(ds, shape, name, attrs)
+		if err != nil {
+			return nil, newError("could not open dataset %q lazily: %v", name, err)
+		}
+		if ok {
+			return lf, nil
+		}
+	}
+
 	value, dtype, err := readDatasetValue(ds, shape, name)
 	if err != nil {
 		if isUnsupportedVlenString(err) {
@@ -298,6 +314,9 @@ func (nf *NXFile) writeGroup(parent container, name string, g *NXgroup) error {
 }
 
 func (nf *NXFile) writeField(parent container, name string, f *NXfield) error {
+	if f.lazy != nil {
+		return newError("could not write field %q: it is lazily loaded; call ReadData() first", name)
+	}
 	ds, err := writeDatasetValue(parent, name, f.Value, f.Shape)
 	if err != nil {
 		return newError("could not write field %q: %v", name, err)

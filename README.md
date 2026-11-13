@@ -255,18 +255,54 @@ File `mode` strings match Python's: `"r"` (default, read-only), `"rw"`/`"r+"`
 (read-write, must exist), `"w"` (create/truncate), `"w-"`/`"x"` (create,
 error if exists), `"a"` (read-write, create if missing).
 
+## Lazy loading
+
+`gonexus.Load` reads every dataset into memory. For files that are too big
+for that, `LoadWithOptions` offers two opt-in modes (the default,
+`LazyOff`, is the behavior of `Load`):
+
+| Mode       | Behavior |
+|------------|----------|
+| `LazyOff`  | Everything is read eagerly (same as `Load`). |
+| `LazyAuto` | Datasets with more than `Threshold` elements (default 100000) stay on disk; smaller ones are read as usual. |
+| `LazyAll`  | Every non-scalar, non-string dataset stays on disk. |
+
+```go
+root, err := gonexus.LoadWithOptions("big.nxs", gonexus.LoadOptions{
+    Mode: gonexus.LazyAuto, Threshold: 100_000,
+})
+if err != nil { ... }
+defer root.Close() // lazy trees keep the HDF5 file open
+
+fmt.Println(root.Tree()) // metadata only: dtype, shape, attrs - instant
+
+f, _ := root.GetField("entry/data/I") // int64(6587x300)
+f.Lazy()                              // true; f.Value == nil
+row, _ := f.ReadSlice(10*300, 300)    // []int64: row 10 only, read from disk
+all := f.ReadData()                   // optional: pull the whole array in
+```
+
+`ReadSlice(offset, count)` addresses the field as a flat, row-major array
+(row `r` of an `R x C` field is `ReadSlice(r*C, C)`); only that window is
+read. Scalars and string datasets are always read eagerly, and
+`Float64()`/`Int64()` return an error on a lazy field until `ReadData` has
+been called. Saving a tree that still contains lazy fields is refused for
+the same reason. All HDF5 calls made through `Load`/`LoadWithOptions` and
+the lazy readers are serialized by a package-wide mutex, so a lazy tree
+can be shared between goroutines.
+
 ## Differences from Python `nexusformat`
 
 This is an idiomatic re-implementation, not a transliteration. The
 significant, deliberate differences:
 
-- **Eager loading only.** Python's `nxload` defaults to lazily loading only
-  the first two tree levels, fetching the rest from disk on first access
+- **Eager loading by default, lazy loading on request.** Python's `nxload`
+  defaults to lazily loading only the first two tree levels
   (`NX_CONFIG['recursive'] = False`). `gonexus.Load` always reads the whole
-  file into memory in one pass (`Config.Recursive` exists for future use
-  but currently has no effect). For very large files, open with
-  `gonexus.Open` and add your own on-demand reads against the returned
-  `*NXFile` if lazy access matters to you.
+  file into memory in one pass (`Config.Recursive` is kept for API
+  compatibility but has no effect). For very large files use
+  `gonexus.LoadWithOptions`, which keeps big datasets on disk and reads
+  them on demand - see [Lazy loading](#lazy-loading).
 - **No file locking.** Python's `NXFile`/`NXLock` support optional
   cross-process advisory locking (`NX_LOCK` etc.) for concurrent access to
   a shared file. `gonexus` does not implement this; coordinate concurrent

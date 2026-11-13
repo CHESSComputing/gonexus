@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"io/fs"
 	"log"
 	"net/http"
 	"os"
@@ -20,6 +21,14 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+)
+
+const (
+	// downloadTimeout is a generous safety net for one S3 download, which
+	// is deliberately not tied to the lifetime of the HTTP request.
+	downloadTimeout = 6 * time.Hour
+	// recentUse protects files used within this window from cache eviction.
+	recentUse = time.Minute
 )
 
 // nexusSuffixes lists the file extensions treated as NeXus/HDF5 data when
@@ -45,8 +54,17 @@ type Store struct {
 	prefix   string
 	cacheDir string
 
-	mu       sync.Mutex // guards keyLocks
-	keyLocks map[string]*sync.Mutex
+	mu        sync.Mutex // guards keyLocks and lastCheck
+	keyLocks  map[string]*sync.Mutex
+	lastCheck map[string]time.Time // key -> last successful ETag verification
+
+	headTTL  time.Duration // 0: HEAD on every Ensure
+	cacheMax int64         // 0: no cap on cacheDir
+
+	// onFileChanged, if set, is called with the local path whenever a
+	// cached file was replaced or deleted, so cached parsed trees of the
+	// old file can be dropped.
+	onFileChanged func(localPath string)
 }
 
 func newStore(ctx context.Context, cfg *Config) (*Store, error) {
@@ -80,6 +98,10 @@ func newStore(ctx context.Context, cfg *Config) (*Store, error) {
 		prefix:   cfg.Prefix,
 		cacheDir: cfg.CacheDir,
 		keyLocks: make(map[string]*sync.Mutex),
+
+		lastCheck: make(map[string]time.Time),
+		headTTL:   time.Duration(cfg.HeadTTLSeconds) * time.Second,
+		cacheMax:  cfg.CacheMaxBytes,
 	}, nil
 }
 
@@ -186,6 +208,18 @@ func (s *Store) Ensure(ctx context.Context, key string) (string, error) {
 	lock.Lock()
 	defer lock.Unlock()
 
+	localPath := s.localPath(key)
+	etagPath := localPath + ".etag"
+
+	// Verified against S3 within headTTL and still on disk: skip the
+	// HeadObject round trip.
+	if s.headTTL > 0 && s.recentlyChecked(key) {
+		if _, err := os.Stat(localPath); err == nil {
+			s.touch(localPath)
+			return localPath, nil
+		}
+	}
+
 	head, err := s.client.HeadObject(ctx, &s3.HeadObjectInput{
 		Bucket: aws.String(s.bucket),
 		Key:    aws.String(key),
@@ -195,11 +229,10 @@ func (s *Store) Ensure(ctx context.Context, key string) (string, error) {
 	}
 	etag := strings.Trim(aws.ToString(head.ETag), `"`)
 
-	localPath := s.localPath(key)
-	etagPath := localPath + ".etag"
-
 	if cached, err := os.ReadFile(etagPath); err == nil && string(cached) == etag {
 		if _, err := os.Stat(localPath); err == nil {
+			s.markChecked(key)
+			s.touch(localPath)
 			return localPath, nil
 		}
 	}
@@ -208,8 +241,16 @@ func (s *Store) Ensure(ctx context.Context, key string) (string, error) {
 		return "", internal("creating cache directory: %v", err)
 	}
 
+	// The download must outlive the request that triggered it: for a
+	// multi-GB object the client (or the server's WriteTimeout) may give
+	// up first, and cancelling the request context would abort the
+	// transfer and throw the partial file away. Detached, it completes
+	// and the client's retry is served from the cache.
+	dlCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), downloadTimeout)
+	defer cancel()
+
 	log.Printf("downloading s3://%s/%s -> %s", s.bucket, key, localPath)
-	getResp, err := s.client.GetObject(ctx, &s3.GetObjectInput{
+	getResp, err := s.client.GetObject(dlCtx, &s3.GetObjectInput{
 		Bucket: aws.String(s.bucket),
 		Key:    aws.String(key),
 	})
@@ -241,7 +282,94 @@ func (s *Store) Ensure(ctx context.Context, key string) (string, error) {
 		// next time.
 		log.Printf("warning: could not write etag sidecar for %s: %v", key, err)
 	}
+	log.Printf("downloaded s3://%s/%s", s.bucket, key)
+
+	s.markChecked(key)
+	// Any parsed tree of the previous version of this file is stale.
+	if s.onFileChanged != nil {
+		s.onFileChanged(localPath)
+	}
+	s.enforceQuota(localPath)
 	return localPath, nil
+}
+
+func (s *Store) recentlyChecked(key string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	t, ok := s.lastCheck[key]
+	return ok && time.Since(t) < s.headTTL
+}
+
+func (s *Store) markChecked(key string) {
+	s.mu.Lock()
+	s.lastCheck[key] = time.Now()
+	s.mu.Unlock()
+}
+
+// touch records "used now" on a cached file; its mtime is the LRU clock
+// for cache eviction.
+func (s *Store) touch(localPath string) {
+	now := time.Now()
+	_ = os.Chtimes(localPath, now, now)
+}
+
+// enforceQuota deletes least-recently-used cached files (never keep, and
+// never anything used within recentUse) until CacheDir is within
+// cacheMax bytes. Deleted files are reported through onFileChanged so
+// parsed trees (and the HDF5 handles they hold) are released too.
+func (s *Store) enforceQuota(keep string) {
+	if s.cacheMax <= 0 {
+		return
+	}
+	type cachedFile struct {
+		path string
+		size int64
+		mod  time.Time
+	}
+	var files []cachedFile
+	var total int64
+	_ = filepath.WalkDir(s.cacheDir, func(p string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return nil
+		}
+		name := d.Name()
+		if strings.HasSuffix(name, ".etag") || strings.HasPrefix(name, ".download-") {
+			return nil
+		}
+		info, err := d.Info()
+		if err != nil {
+			return nil
+		}
+		files = append(files, cachedFile{path: p, size: info.Size(), mod: info.ModTime()})
+		total += info.Size()
+		return nil
+	})
+	if total <= s.cacheMax {
+		return
+	}
+
+	sort.Slice(files, func(i, j int) bool { return files[i].mod.Before(files[j].mod) })
+	cutoff := time.Now().Add(-recentUse)
+	for _, f := range files {
+		if total <= s.cacheMax {
+			break
+		}
+		if f.path == keep || f.mod.After(cutoff) {
+			continue
+		}
+		if err := os.Remove(f.path); err != nil {
+			continue
+		}
+		os.Remove(f.path + ".etag")
+		total -= f.size
+		log.Printf("cache: evicted %s (%d bytes) to stay under %d bytes", f.path, f.size, s.cacheMax)
+		if s.onFileChanged != nil {
+			s.onFileChanged(f.path)
+		}
+	}
+	if total > s.cacheMax {
+		log.Printf("warning: cache is %d bytes, over the %d byte cap (remaining files are in use or just downloaded)", total, s.cacheMax)
+	}
 }
 
 // localPath maps an S3 key to a stable, collision-free path under

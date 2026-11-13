@@ -9,3 +9,13 @@ field_default_limit: 10000
 field_max_limit: 1000000
 aws_access_key: myaccess
 aws_secret: mysecret
+
+# Lazy loading of big datasets (see LAZY.md). Default is off.
+# lazy: off            # off | auto | all
+# lazy_threshold: 100000   # auto: datasets with more elements stay on disk
+# max_open_files: 8        # lazy trees (open HDF5 files) kept cached
+
+# Large-file operation (see OPERATIONS.md).
+# write_timeout: 600       # seconds a response (incl. first S3 download) may take; 0 = no limit
+# head_ttl: 30             # seconds before a cached file is re-checked against S3; 0 = every request
+# cache_max_bytes: 0       # cap on cache_dir size (LRU eviction); 0 = unlimited
