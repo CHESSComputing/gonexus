@@ -13,6 +13,74 @@ const MAX_PLOT_POINTS = 50000;      // default 1-D window
 const HEATMAP_ELEMS   = 200000;     // default heatmap block size
 const HEATMAP_MAX     = 1000000;    // UI cap for a heatmap block
 
+/* ------------------------------------------------------------ settings model
+ * Look-and-feel settings are layered; later layers win:
+ *   1. DEFAULTS            built in (also shipped as ui/config.json)
+ *   2. ADMIN               /ui/config.json, so an operator can set site defaults
+ *   3. USER                what the person changed in the settings panel (localStorage)
+ *   4. URLP                query parameters, e.g. ?theme=dark&fileList.maxRows=20
+ *                          (for shareable links; not saved)
+ * CFG is the merged result. Unknown keys and values of the wrong type are ignored. */
+const DEFAULTS = {
+  theme: 'auto',          // 'auto' (follow the OS), 'light' or 'dark'
+  fontSize: 14,           // base font size, px
+  sidebarWidth: 340,      // width of the tree panel, px
+  plotHeight: 360,        // height of line plots, px
+  heatmapHeight: 420,     // height of heatmaps, px
+  fileList: {             // the file-picker dropdown
+    maxRows: 12,          // rows visible before the list scrolls
+    width: 'input',       // 'input' (as wide as the box), 'auto' (fit the longest key) or a CSS width such as '640px'
+    align: 'left',        // lines up with the box's 'left' edge, 'right' edge or 'center'
+    offsetX: 0,           // extra horizontal shift, px
+    offsetY: 4,           // gap between box and list, px
+    showSize: true,
+    showDate: true,
+    match: 'substring',   // 'substring' or 'prefix'
+    maxRender: 500,       // most entries drawn at once; type to narrow the rest
+  },
+};
+const clone = o => JSON.parse(JSON.stringify(o));
+function merge(target, src) {
+  for (const [k, v] of Object.entries(src || {})) {
+    if (!(k in target)) continue;
+    if (v && typeof v === 'object' && !Array.isArray(v) && target[k] && typeof target[k] === 'object') merge(target[k], v);
+    else if (typeof v === typeof target[k] && !(typeof v === 'number' && !isFinite(v))) target[k] = v;
+  }
+  return target;
+}
+function getPath(o, path) { return path.split('.').reduce((x, k) => (x == null ? undefined : x[k]), o); }
+function setPath(o, path, v) {
+  const ks = path.split('.'); let x = o;
+  for (const k of ks.slice(0, -1)) x = (x[k] && typeof x[k] === 'object') ? x[k] : (x[k] = {});
+  x[ks[ks.length - 1]] = v;
+}
+function delPath(o, path) {
+  const ks = path.split('.'); let x = o;
+  for (const k of ks.slice(0, -1)) { x = x && x[k]; if (!x || typeof x !== 'object') return; }
+  delete x[ks[ks.length - 1]];
+}
+function loadUser() {
+  let u = {};
+  try { u = JSON.parse(localStorage.getItem('nxui') || '{}') || {}; } catch (_) {}
+  try {   // older versions stored only the theme
+    const t = localStorage.getItem('nxtheme');
+    if (!u.theme && (t === 'light' || t === 'dark')) u.theme = t;
+  } catch (_) {}
+  return u;
+}
+function urlPrefs() {
+  const out = {};
+  for (const [k, v] of new URLSearchParams(location.search)) {
+    const d = getPath(DEFAULTS, k);
+    if (d === undefined || typeof d === 'object') continue;
+    setPath(out, k, typeof d === 'number' ? Number(v) : typeof d === 'boolean' ? (v === 'true' || v === '1') : v);
+  }
+  return out;
+}
+let ADMIN = {}, USER = loadUser(), URLP = urlPrefs();
+const computeCFG = () => merge(merge(merge(clone(DEFAULTS), ADMIN), USER), URLP);
+let CFG = computeCFG();
+
 /* ------------------------------------------------------------ helpers */
 const $ = (s, r = document) => r.querySelector(s);
 function h(tag, attrs, ...kids) {
@@ -649,7 +717,7 @@ function toCSV(values, cols) {
 const csvCell = v => typeof v === 'string' ? '"' + v.replace(/"/g, '""') + '"' : v;
 
 function buildPlot(F, body) {
-  const vals = F.data.values, plot = new LinePlot(360);
+  const vals = F.data.values, plot = new LinePlot(CFG.plotHeight);
   const unit = F.meta.units || F.n.units;
   const xcand = xSelect(F);
   const log = h('label', null, h('input', { type: 'checkbox', checked: F.logY, onchange: e => { F.logY = e.target.checked; draw(); } }), 'log y');
@@ -666,7 +734,7 @@ function buildPlot(F, body) {
 }
 
 function buildHeatmap(F, body) {
-  const hm = new Heatmap(420), vals = F.hm.values, rows = Math.round(vals.length / F.rowLen);
+  const hm = new Heatmap(CFG.heatmapHeight), vals = F.hm.values, rows = Math.round(vals.length / F.rowLen);
   const r0 = h('input', { type: 'number', min: 0, max: F.nrows - 1, value: F.hmRow0 }), nr = h('input', { type: 'number', min: 1, max: F.nrows, value: F.hmRows });
   const go = () => {
     F.hmRow0 = Math.max(0, Math.min(F.nrows - 1, +r0.value || 0));
@@ -728,7 +796,7 @@ $('#tabs').addEventListener('click', e => { if (e.target.dataset.tab) setTab(e.t
 async function openFile(key, path) {
   key = key.trim(); if (!key) return;
   S.key = key; S.nodes.clear(); S.selected = null; S.fieldToken++;
-  $('#fileInput').value = key;
+  FileCombo.setValue(key);
   const tree = $('#tree'); tree.replaceChildren(h('div', { class: 'hint', style: 'padding:8px' }, 'Loading…'));
   $('#detail').replaceChildren();
   try {
@@ -751,35 +819,251 @@ async function openFile(key, path) {
 async function loadFiles() {
   try {
     const r = await api('/files');
-    $('#fileList').replaceChildren(...(r.files || []).map(f => h('option', { value: f.key }, `${fmtBytes(f.size)}`)));
+    FileCombo.setFiles(r.files || []);
     return r.files || [];
   } catch (e) { status('Could not list files: ' + e.message, true); return []; }
 }
 
+/* ------------------------------------------------------------ file picker (combobox) */
+/* A custom dropdown instead of <datalist>: the native popup cannot be sized
+ * or positioned, only offers entries matching the text already in the box
+ * (so after choosing a file you had to delete its name to see the list
+ * again) and has no clear button. Behavior comes from CFG.fileList. */
+const FileCombo = (() => {
+  const input = $('#fileInput'), box = $('#fileCombo'), clearBtn = $('#clearBtn'), toggleBtn = $('#toggleBtn');
+  const list = h('div', { id: 'fileListbox', class: 'listbox hidden', role: 'listbox' });
+  document.body.append(list);
+  let files = [], shown = [], active = -1, isOpen = false, filtering = false;
+
+  const cfg = () => CFG.fileList;
+  const query = () => filtering ? input.value.trim().toLowerCase() : '';
+  const updateClear = () => clearBtn.classList.toggle('hidden', !input.value);
+
+  function highlight(text, q) {
+    if (!q) return [text];
+    const i = cfg().match === 'prefix' ? (text.toLowerCase().startsWith(q) ? 0 : -1) : text.toLowerCase().indexOf(q);
+    return i < 0 ? [text] : [text.slice(0, i), h('mark', null, text.slice(i, i + q.length)), text.slice(i + q.length)];
+  }
+
+  function render() {
+    const q = query(), c = cfg();
+    const items = q ? files.filter(f => { const k = f.key.toLowerCase(); return c.match === 'prefix' ? k.startsWith(q) : k.includes(q); }) : files;
+    shown = items.slice(0, Math.max(1, c.maxRender));
+    active = q ? (shown.length ? 0 : -1) : shown.findIndex(f => f.key === S.key);
+    const rows = shown.map((f, i) => {
+      const d = f.last_modified ? new Date(f.last_modified) : null;
+      return h('div', { class: 'lb-item' + (i === active ? ' active' : ''), role: 'option', title: f.key,
+          onmousedown: e => { e.preventDefault(); choose(f); } },
+        h('span', { class: 'lb-name' }, ...highlight(f.key, q)),
+        c.showSize && f.size != null ? h('span', { class: 'lb-meta' }, fmtBytes(f.size)) : null,
+        c.showDate && d && !isNaN(d) ? h('span', { class: 'lb-meta' }, d.toLocaleDateString()) : null);
+    });
+    list.replaceChildren(
+      h('div', { class: 'lb-head' }, q ? `${items.length} of ${files.length} files match “${input.value.trim()}”`
+                                     : `${files.length} file${files.length === 1 ? '' : 's'}`),
+      ...rows,
+      items.length > shown.length ? h('div', { class: 'lb-more' }, `… ${items.length - shown.length} more – keep typing to narrow the list`) : null,
+      !items.length ? h('div', { class: 'lb-empty' }, files.length ? 'No matching files – press Enter to open this key anyway' : 'The server lists no files') : null);
+  }
+
+  /* Place the list relative to the box, entirely inside the viewport. */
+  function position() {
+    const c = cfg(), r = box.getBoundingClientRect(), m = 8;
+    const vw = document.documentElement.clientWidth, vh = document.documentElement.clientHeight;
+    list.style.maxWidth = (vw - 2 * m) + 'px';
+    list.style.minWidth = '';
+    if (c.width === 'input') list.style.width = r.width + 'px';
+    else if (c.width === 'auto') { list.style.width = 'max-content'; list.style.minWidth = r.width + 'px'; }
+    else list.style.width = String(c.width);
+
+    const first = list.querySelector('.lb-item'), head = list.querySelector('.lb-head');
+    const rowH = first ? first.offsetHeight : 30, headH = head ? head.offsetHeight : 0;
+    const wanted = headH + rowH * Math.max(1, c.maxRows) + 2;
+    const below = vh - r.bottom - c.offsetY - m;          // the box is in the top bar: the list opens below it
+    list.style.maxHeight = Math.min(wanted, Math.max(80, below)) + 'px';
+
+    const w = list.offsetWidth;
+    let left = r.left;
+    if (c.align === 'right') left = r.right - w;
+    else if (c.align === 'center') left = r.left + (r.width - w) / 2;
+    left = Math.max(m, Math.min(left + c.offsetX, vw - w - m));
+    list.style.left = left + 'px';
+    list.style.top = (r.bottom + c.offsetY) + 'px';
+  }
+
+  function scrollActive() { const el = list.querySelector('.lb-item.active'); if (el) el.scrollIntoView({ block: 'nearest' }); }
+  function open(filter) {
+    filtering = !!filter;
+    render();
+    list.classList.remove('hidden'); isOpen = true;
+    input.setAttribute('aria-expanded', 'true');
+    position(); scrollActive();
+  }
+  function close() {
+    if (!isOpen) return;
+    isOpen = false; list.classList.add('hidden');
+    input.setAttribute('aria-expanded', 'false');
+  }
+  function move(d) {
+    if (!isOpen) { open(false); return; }
+    if (!shown.length) return;
+    active = active < 0 ? (d > 0 ? 0 : shown.length - 1) : (active + d + shown.length) % shown.length;
+    list.querySelectorAll('.lb-item').forEach((el, i) => el.classList.toggle('active', i === active));
+    scrollActive();
+  }
+  function choose(f) { input.value = f.key; updateClear(); close(); openFile(f.key); }
+
+  input.addEventListener('click', () => { input.select(); open(false); });   // click: select the name, show ALL files
+  input.addEventListener('input', () => { updateClear(); open(true); });     // typing: filter
+  input.addEventListener('keydown', e => {
+    if (e.key === 'ArrowDown') { move(1); e.preventDefault(); }
+    else if (e.key === 'ArrowUp') { move(-1); e.preventDefault(); }
+    else if (e.key === 'Enter') {
+      e.preventDefault();
+      const v = input.value.trim(), exact = files.find(f => f.key === v);
+      if (exact) choose(exact);
+      else if (isOpen && active >= 0 && shown[active]) choose(shown[active]);
+      else { close(); openFile(v); }
+    } else if (e.key === 'Escape') {
+      if (isOpen) close(); else if (input.value) { input.value = ''; updateClear(); }
+    } else if (e.key === 'Tab') close();
+  });
+  clearBtn.addEventListener('mousedown', e => e.preventDefault());
+  clearBtn.addEventListener('click', () => { input.value = ''; updateClear(); input.focus(); open(false); });
+  toggleBtn.addEventListener('mousedown', e => e.preventDefault());
+  toggleBtn.addEventListener('click', () => { if (isOpen) close(); else { input.focus(); open(false); } });
+  list.addEventListener('mousedown', e => e.preventDefault());               // keep focus in the box
+  document.addEventListener('mousedown', e => { if (isOpen && !box.contains(e.target) && !list.contains(e.target)) close(); });
+  addEventListener('resize', () => { if (isOpen) position(); });
+  addEventListener('scroll', e => { if (isOpen && !list.contains(e.target)) position(); }, true);
+  updateClear();
+
+  const refresh = () => { if (isOpen) { render(); position(); } };
+  return {
+    setFiles(f) { files = f || []; refresh(); },
+    setValue(v) { input.value = v; updateClear(); },
+    refresh, close,
+  };
+})();
+
+/* ------------------------------------------------------------ settings panel */
+function rerenderField() { if (S.selected && !isGroup(S.selected)) showField(S.selected); }
+
+function applyCFG() {
+  const root = document.documentElement;
+  const t = CFG.theme === 'auto' ? (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : CFG.theme;
+  const themeChanged = root.dataset.theme !== t;
+  root.dataset.theme = t;
+  root.style.setProperty('--fs', CFG.fontSize + 'px');
+  $('.sidebar').style.width = CFG.sidebarWidth + 'px';
+  FileCombo.refresh();
+  return themeChanged;
+}
+
+const Settings = (() => {
+  const SPEC = [
+    ['Appearance', [
+      ['theme', 'Color scheme', 'select', ['auto', 'light', 'dark']],
+      ['fontSize', 'Font size (px)', 'number', { min: 10, max: 24 }],
+      ['sidebarWidth', 'Tree panel width (px)', 'number', { min: 180, max: 1200 }],
+      ['plotHeight', 'Plot height (px)', 'number', { min: 160, max: 1600 }],
+      ['heatmapHeight', 'Heatmap height (px)', 'number', { min: 160, max: 1600 }],
+    ]],
+    ['File list', [
+      ['fileList.maxRows', 'Visible rows', 'number', { min: 3, max: 100 }],
+      ['fileList.width', 'Width: input, auto or e.g. 640px', 'text'],
+      ['fileList.align', 'Align to box', 'select', ['left', 'center', 'right']],
+      ['fileList.offsetX', 'Horizontal shift (px)', 'number', { min: -400, max: 400 }],
+      ['fileList.offsetY', 'Gap below box (px)', 'number', { min: -20, max: 200 }],
+      ['fileList.match', 'Search matches', 'select', ['substring', 'prefix']],
+      ['fileList.showSize', 'Show file size', 'checkbox'],
+      ['fileList.showDate', 'Show date', 'checkbox'],
+    ]],
+  ];
+  let panel = null;
+
+  function set(path, value) {
+    const before = clone(CFG);
+    setPath(USER, path, value); delPath(URLP, path);
+    try { localStorage.setItem('nxui', JSON.stringify(USER)); } catch (_) {}
+    CFG = computeCFG();
+    afterChange(before);
+  }
+  function afterChange(before) {
+    const themeChanged = applyCFG();
+    if (themeChanged || before.plotHeight !== CFG.plotHeight || before.heatmapHeight !== CFG.heatmapHeight) rerenderField();
+  }
+  function reset() {
+    const before = clone(CFG);
+    USER = {}; URLP = {};
+    try { localStorage.removeItem('nxui'); localStorage.removeItem('nxtheme'); } catch (_) {}
+    CFG = computeCFG();
+    afterChange(before); build();
+  }
+
+  function row([path, label, kind, opt]) {
+    const cur = getPath(CFG, path);
+    let ctl;
+    if (kind === 'select') {
+      ctl = h('select', { onchange: e => set(path, e.target.value) },
+        ...opt.map(o => h('option', { value: o, selected: o === cur }, o)));
+    } else if (kind === 'checkbox') {
+      ctl = h('input', { type: 'checkbox', checked: !!cur, onchange: e => set(path, e.target.checked) });
+    } else if (kind === 'number') {
+      ctl = h('input', { type: 'number', value: cur, min: opt.min, max: opt.max, step: 1, onchange: e => {
+        const n = Number(e.target.value);
+        if (!isFinite(n)) { e.target.value = getPath(CFG, path); return; }
+        const v = Math.max(opt.min, Math.min(opt.max, Math.round(n)));
+        e.target.value = v; set(path, v);
+      } });
+    } else {
+      ctl = h('input', { type: 'text', value: cur, spellcheck: 'false',
+        onchange: e => { const v = e.target.value.trim() || String(getPath(DEFAULTS, path)); e.target.value = v; set(path, v); } });
+    }
+    return h('label', { class: 'st-row' }, h('span', null, label), ctl);
+  }
+
+  function build() {
+    if (!panel) {
+      panel = h('div', { id: 'settings', class: 'settings hidden', role: 'dialog', 'aria-label': 'Settings' });
+      document.body.append(panel);
+    }
+    const kids = [h('div', { class: 'st-head' }, h('strong', null, 'Settings'),
+      h('button', { class: 'btn ghost small', 'aria-label': 'Close', onclick: close }, '×'))];
+    for (const [title, fields] of SPEC) kids.push(h('h4', null, title), ...fields.map(row));
+    kids.push(h('div', { class: 'st-foot' },
+      h('button', { class: 'btn small', onclick: reset }, 'Reset to defaults'),
+      h('button', { class: 'btn small', onclick: () => { navigator.clipboard && navigator.clipboard.writeText(JSON.stringify(CFG, null, 2)); status('Settings copied as JSON'); } }, 'Copy as JSON')),
+      h('div', { class: 'hint' }, 'Saved in this browser. An administrator can set site-wide defaults in config.json; URL parameters such as ?theme=dark&fileList.maxRows=20 override for one visit.'));
+    panel.replaceChildren(...kids);
+  }
+  function open() { build(); panel.classList.remove('hidden'); FileCombo.close(); }
+  function close() { if (panel) panel.classList.add('hidden'); }
+  const isOpen = () => panel && !panel.classList.contains('hidden');
+
+  $('#settingsBtn').addEventListener('click', () => { isOpen() ? close() : open(); });
+  document.addEventListener('mousedown', e => { if (isOpen() && !panel.contains(e.target) && !$('#settingsBtn').contains(e.target)) close(); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && isOpen()) close(); });
+  return { set, open, close };
+})();
+
 /* ------------------------------------------------------------ wiring */
-$('#loadBtn').addEventListener('click', () => openFile($('#fileInput').value));
-$('#fileInput').addEventListener('keydown', e => { if (e.key === 'Enter') openFile(e.target.value); });
-$('#fileInput').addEventListener('change', e => { if ([...$('#fileList').options].some(o => o.value === e.target.value)) openFile(e.target.value); });
+$('#loadBtn').addEventListener('click', () => { FileCombo.close(); openFile($('#fileInput').value); });
 $('#reloadFiles').addEventListener('click', loadFiles);
 $('#filterInput').addEventListener('input', applyFilter);
 $('#expandAll').addEventListener('click', expandAll);
 $('#collapseAll').addEventListener('click', collapseAll);
 $('#themeBtn').addEventListener('click', () => {
-  const t = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
-  document.documentElement.dataset.theme = t; try { localStorage.setItem('nxtheme', t); } catch (_) {}
-  if (S.selected && !isGroup(S.selected)) S.selected.row.click();
+  Settings.set('theme', document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark');
 });
-(() => {
-  let t; try { t = localStorage.getItem('nxtheme'); } catch (_) {}
-  if (!t) t = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-  document.documentElement.dataset.theme = t;
-})();
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { if (CFG.theme === 'auto' && applyCFG()) rerenderField(); });
+applyCFG();   // apply saved/URL settings before anything is drawn
 (() => {   // resizable sidebar
   const sp = $('#splitter'), sb = $('.sidebar');
   sp.addEventListener('mousedown', e => {
     e.preventDefault(); sp.classList.add('drag');
     const mv = ev => { sb.style.width = Math.max(180, Math.min(innerWidth - 300, ev.clientX)) + 'px'; };
-    const up = () => { sp.classList.remove('drag'); removeEventListener('mousemove', mv); removeEventListener('mouseup', up); };
+    const up = () => { sp.classList.remove('drag'); removeEventListener('mousemove', mv); removeEventListener('mouseup', up); Settings.set('sidebarWidth', Math.round(sb.getBoundingClientRect().width)); };
     addEventListener('mousemove', mv); addEventListener('mouseup', up);
   });
 })();
@@ -792,6 +1076,10 @@ addEventListener('hashchange', () => {
 });
 
 (async () => {
+  try {   // site-wide defaults from the administrator (optional)
+    const r = await fetch('config.json', { cache: 'no-cache' });
+    if (r.ok) { ADMIN = await r.json(); CFG = computeCFG(); applyCFG(); }
+  } catch (e) { console.warn('ignoring config.json:', e); }
   const files = await loadFiles();
   const hp = new URLSearchParams(location.hash.slice(1));
   const key = hp.get('key') || (files.length === 1 ? files[0].key : '');

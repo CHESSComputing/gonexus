@@ -10,12 +10,16 @@
 <header class="topbar">
   <div class="brand">NeXus<span>Browser</span></div>
   <div class="filepick">
-    <input id="fileInput" list="fileList" placeholder="Select or type file key, e.g. chess/results.nxs" spellcheck="false" autocomplete="off">
-    <datalist id="fileList"></datalist>
+    <div class="combo" id="fileCombo">
+      <input id="fileInput" type="text" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="fileListbox" placeholder="Select or type file key, e.g. chess/results.nxs" spellcheck="false" autocomplete="off">
+      <button id="clearBtn" class="combo-btn clear hidden" type="button" tabindex="-1" aria-label="Clear" title="Clear">&times;</button>
+      <button id="toggleBtn" class="combo-btn" type="button" tabindex="-1" aria-label="Show file list" title="Show file list">&#9662;</button>
+    </div>
     <button id="loadBtn" class="btn primary">Open</button>
     <button id="reloadFiles" class="btn" title="Reload file list">&#8635;</button>
   </div>
   <button id="themeBtn" class="btn ghost" title="Toggle light/dark theme" style="font-size:16px">&#9680;</button>
+  <button id="settingsBtn" class="btn ghost" title="Settings" aria-label="Settings" aria-haspopup="dialog" style="font-size:16px">&#9881;</button>
 </header>
 
 <main class="layout" id="layout">

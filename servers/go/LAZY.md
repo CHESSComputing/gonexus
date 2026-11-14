@@ -52,6 +52,66 @@ work unmodified.
 * The file is still downloaded from S3 into `cache_dir` in full (HDF5 needs a
   seekable file); lazy loading saves RAM, not disk or first-access time.
 
+## Files larger than RAM: what is loaded, and how to get the next chunk
+
+**The tree is always complete.** In every mode (`off`, `auto`, `all`) the
+server reads the whole structure when a file is first opened: every group, its
+class, every field's name, dtype, shape, units and attributes. So the tree in
+the web UI (`root:NXroot` and everything below it), `/tree`, `/entries` and
+`/group` look identical in all three modes. The modes differ only in what happens
+to the *array contents*:
+
+| mode | array contents |
+|---|---|
+| `off` | all read into RAM when the file is opened. A file that is larger than RAM cannot be served in this mode. |
+| `auto` | fields with more than `lazy_threshold` elements stay on disk; **smaller fields are read into RAM at open time** and sliced from memory afterwards. |
+| `all` | every array stays on disk; only scalars and strings (small) are kept in RAM. |
+
+Scalars and string fields are always in RAM.
+
+**Getting the next chunk.** There is no server-side "cursor": each request
+names the window it wants, and only that window is read from disk. `/field`
+takes `offset` and `limit`, counted in elements of the flat, row-major array,
+and tells you where you are:
+
+```json
+{ "offset": 0, "count": 10000, "total": 1976100, "truncated": true, "values": [ ... ] }
+```
+
+`truncated: true` means more data follows; the next chunk is
+`offset = offset + count`. Row `r` of an `R x C` field is `offset=r*C&limit=C`.
+If `limit` is omitted the server uses `field_default_limit` (10000), and it
+never returns more than `field_max_limit` (default 1000000) elements per request.
+
+```bash
+# walk a big field 100000 elements at a time
+off=0; while :; do
+  r=$(curl -s "localhost:8081/field?key=chess/big.nxs&path=entry/data/I&offset=$off&limit=100000")
+  echo "$r" | jq '{offset, count, total, truncated}'
+  [ "$(echo "$r" | jq .truncated)" = true ] || break
+  off=$((off + $(echo "$r" | jq .count)))
+done
+```
+
+From the other front ends:
+
+* **Python client:** `field[100:200]` downloads just those rows, and
+  `for first_row, block in field.iter_chunks(rows=1000): ...` walks the whole
+  array in bounded memory. (`field.read()` allocates the entire array in the
+  *client's* memory, so avoid it for data larger than the client's RAM.)
+* **Web UI:** a 1-D field shows a window (default 50000 elements) with
+  *offset / limit / prev / next*; an N-d field has a row slider and prev/next
+  (one row per request); the heatmap loads a block of rows (default about
+  200000 elements) with *prev / next*. Only the visible window is fetched.
+
+**Sizing.** In `all` mode, server memory is bounded by the number of in-flight
+`/field` requests times `limit x element size` (plus its JSON text), regardless
+of file size. In `auto` mode the *sum of all fields at or below the threshold*
+is held in RAM, so many small fields can add up: lower `lazy_threshold`, or use
+`all`, if that total could approach your RAM. Setting the `GOMEMLIMIT`
+environment variable (for example `GOMEMLIMIT=2GiB`) makes the Go runtime give
+memory back sooner.
+
 ## Trying it
 
 ```bash

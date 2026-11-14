@@ -235,7 +235,7 @@ func main() {
 	mux.HandleFunc("/entries", srv.handleEntries)
 	mux.HandleFunc("/group", srv.handleGroup)
 	mux.HandleFunc("/field", srv.handleField)
-	registerUI(mux) // browser UI at /ui/ (see ui.go)
+	registerUI(mux, cfg.UIConfigFile) // browser UI at /ui/ (see ui.go)
 
 	httpSrv := &http.Server{
 		Addr:         cfg.Addr,

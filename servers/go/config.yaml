@@ -26,3 +26,7 @@ aws_secret: mysecret
 # data_dir/chess/RE3/x.nxs has key chess/RE3/x.nxs); symlinked files AND
 # directories are followed; nothing is copied into cache_dir.
 # data_dir: /path/data/nexus-data
+#
+# Site-wide defaults for the web UI's look and feel (see UI.md). A JSON file
+# like ui/config.json; users can still override it in the UI's settings panel.
+# ui_config: /etc/gonexus/ui.json

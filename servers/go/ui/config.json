@@ -1,0 +1,18 @@
+{
+  "theme": "auto",
+  "fontSize": 14,
+  "sidebarWidth": 340,
+  "plotHeight": 360,
+  "heatmapHeight": 420,
+  "fileList": {
+    "maxRows": 12,
+    "width": "input",
+    "align": "left",
+    "offsetX": 0,
+    "offsetY": 4,
+    "showSize": true,
+    "showDate": true,
+    "match": "substring",
+    "maxRender": 500
+  }
+}

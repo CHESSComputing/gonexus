@@ -48,6 +48,10 @@ type Config struct {
 	// are not used. S3Prefix still selects which keys /files lists.
 	DataDir string // data_dir / NEXUS_DATA_DIR (default "": use S3)
 
+	// UIConfigFile is an optional JSON file with site-wide defaults for the
+	// web UI's look and feel, served as /ui/config.json (see UI.md).
+	UIConfigFile string // ui_config / NEXUS_UI_CONFIG (default "": built-in defaults)
+
 	// Lazy loading of large datasets (see LAZY.md). "off" (default) reads
 	// every dataset into memory when a file is first opened, exactly as
 	// before. "auto" leaves datasets with more than LazyThreshold elements
@@ -102,6 +106,7 @@ type fileConfig struct {
 	DefaultFieldLimit *int    `json:"field_default_limit"  yaml:"field_default_limit"`
 	MaxFieldLimit     *int    `json:"field_max_limit"      yaml:"field_max_limit"`
 	DataDir           *string `json:"data_dir"             yaml:"data_dir"`
+	UIConfigFile      *string `json:"ui_config"            yaml:"ui_config"`
 	LazyMode          *string `json:"lazy"                 yaml:"lazy"`
 	LazyThreshold     *int    `json:"lazy_threshold"       yaml:"lazy_threshold"`
 	MaxOpenFiles      *int    `json:"max_open_files"       yaml:"max_open_files"`
@@ -125,6 +130,7 @@ func loadConfig() (*Config, error) {
 		DefaultFieldLimit: envInt("FIELD_DEFAULT_LIMIT", 10_000),
 		MaxFieldLimit:     envInt("FIELD_MAX_LIMIT", 1_000_000),
 		DataDir:           os.Getenv("NEXUS_DATA_DIR"),
+		UIConfigFile:      os.Getenv("NEXUS_UI_CONFIG"),
 		LazyMode:          firstNonEmpty(os.Getenv("NEXUS_LAZY"), "off"),
 		LazyThreshold:     envInt("NEXUS_LAZY_THRESHOLD", gonexus.DefaultLazyThreshold),
 		MaxOpenFiles:      envInt("NEXUS_MAX_OPEN_FILES", 8),
@@ -250,6 +256,9 @@ func applyFileConfig(cfg *Config, fc *fileConfig) {
 	}
 	if fc.DataDir != nil {
 		cfg.DataDir = *fc.DataDir
+	}
+	if fc.UIConfigFile != nil {
+		cfg.UIConfigFile = *fc.UIConfigFile
 	}
 	if fc.LazyMode != nil {
 		cfg.LazyMode = *fc.LazyMode

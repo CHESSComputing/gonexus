@@ -1,56 +1,54 @@
-# NeXus Browser (web UI)
+# Web UI settings
 
-![we UI](../../examples/http/web_ui.png)
+The browser UI (`/ui/`) has a settings panel (the gear button in the top bar)
+for its look and feel. Settings are layered; later layers win:
 
-Interactive front end for the gonexus HTTP server. It is plain HTML/CSS/JS
-(no build step, no npm, no CDN) embedded into the binary with `go:embed`,
-so the server remains a single executable and works on air-gapped hosts.
+1. **Built-in defaults** (also shipped as `ui/config.json`).
+2. **Site defaults** from the administrator: the JSON file named by
+   `ui_config` / `NEXUS_UI_CONFIG`, served as `/ui/config.json`. It needs no
+   rebuild; edit the file and reload the page. Only the keys you list need to
+   be present.
+3. **The user's own choices** from the settings panel, kept in the browser
+   (`localStorage`). *Reset to defaults* removes them.
+4. **URL parameters** for one visit, e.g.
+   `/ui/?theme=dark&fileList.maxRows=20&fileList.align=right`.
+   Editing a setting in the panel replaces the URL value for that setting.
 
+Unknown keys and values of the wrong type are ignored. *Copy as JSON* in the
+panel copies the effective settings, ready to paste into the site file.
+
+## Settings
+
+| key | default | meaning |
+|---|---|---|
+| `theme` | `auto` | `auto` follows the operating system, or `light` / `dark` |
+| `fontSize` | `14` | base font size in px (all text scales with it) |
+| `sidebarWidth` | `340` | width of the tree panel in px (dragging the divider saves it) |
+| `plotHeight` | `360` | height of line plots in px |
+| `heatmapHeight` | `420` | height of heatmaps in px |
+| `fileList.maxRows` | `12` | rows visible in the file dropdown before it scrolls |
+| `fileList.width` | `input` | `input` (as wide as the box), `auto` (fit the longest key) or a CSS width such as `640px` |
+| `fileList.align` | `left` | how the dropdown lines up with the box: `left` edge, `right` edge or `center` (it always stays inside the window) |
+| `fileList.offsetX` | `0` | extra horizontal shift in px |
+| `fileList.offsetY` | `4` | gap between the box and the dropdown in px (the list opens below the box; its height is limited to the room available) |
+| `fileList.match` | `substring` | typing matches anywhere in the key, or only at its start (`prefix`) |
+| `fileList.showSize` / `showDate` | `true` | columns shown for each file |
+| `fileList.maxRender` | `500` | most entries drawn at once; type to narrow a longer list |
+
+## File picker
+
+Clicking the box selects the current name and shows **all** files; typing
+filters them; the **x** button clears the box; the arrow button toggles the
+list; Up/Down/Enter/Esc work from the keyboard. Enter on a key that is not in
+the list still opens it.
+
+## Example site file
+
+```json
+{
+  "theme": "dark",
+  "fontSize": 15,
+  "plotHeight": 480,
+  "fileList": { "maxRows": 20, "width": "auto", "align": "right" }
+}
 ```
-servers/go/
-  ui.go          go:embed + registerUI(mux)   (serves /ui/, redirects / to /ui/)
-  ui/index.html  page skeleton
-  ui/app.css     styles (light/dark)
-  ui/app.js      tree, field viewer, plots
-```
-
-## Enable
-
-`main.go` needs a single line after the other `mux.HandleFunc` calls
-(`main.go.patch` has it):
-
-```go
-registerUI(mux) // browser UI at /ui/ (see ui.go)
-```
-
-Then rebuild and open `http://localhost:8081/`.
-
-## Features
-
-* File picker from `/files` (or type any key), `Open`.
-* Lazy tree: each group is fetched from `/group` when expanded; attributes,
-  class, dtype, shape and units are shown. Keyboard: arrows / Enter.
-* Filter box, *Expand all*, *Collapse*, resizable sidebar, light/dark theme.
-* Group page: attributes + clickable children table.
-* Field page: dtype/shape/units/attributes, then
-  * scalar: value (JSON strings such as `config` are pretty-printed);
-  * 1-D: line plot (min/max decimated, drag-zoom, dbl-click reset, log-y,
-    hover read-out), paged table, `offset`/`limit` window controls;
-  * N-D: row slider (row = one `offset=row*ncols&limit=ncols` request),
-    heatmap of a block of rows (viridis, log / 1-99 % clip, hover read-out),
-    table; x axis can be taken from any sibling 1-D field of matching length
-    (e.g. `radial` for `I`).
-  * CSV / JSON download of what is loaded, *Copy API URL*.
-* *Raw tree* tab shows `/tree` text.
-* Deep links: `/ui/#key=chess/results.nxs&path=saxs_azimuthal/data/I`.
-
-## Notes
-
-* Multi-dimensional data are flat row-major, so `offset`/`limit` are in
-  elements; the UI relies on that for rows and heatmap blocks.
-* `sliceValues` in `nexusview.go` only slices `float64/float32/int64/int32/
-  string/bool`; other dtypes (`uint8`, `int16`, ...) fall into the
-  `default:` branch and are returned whole with `total: 1`, which the UI
-  cannot page. Add cases there if you have such fields.
-* To serve the UI from another origin use `/ui/?api=http://host:8081`; the
-  API server must then send CORS headers.
