@@ -52,6 +52,15 @@ type Config struct {
 	// web UI's look and feel, served as /ui/config.json (see UI.md).
 	UIConfigFile string // ui_config / NEXUS_UI_CONFIG (default "": built-in defaults)
 
+	// Serving HTTPS (see TLS.md). If a certificate and a key are both set
+	// the server speaks HTTPS, otherwise plain HTTP as before. (The S3_TLS_*
+	// settings concern the connection *to* S3, not this one.) The files are
+	// PEM; the certificate file may contain the intermediate chain. A renewed
+	// pair is picked up without a restart.
+	ServerTLSCertFile   string // tls_cert_file / NEXUS_TLS_CERT_FILE
+	ServerTLSKeyFile    string // tls_key_file / NEXUS_TLS_KEY_FILE
+	ServerTLSMinVersion string // tls_min_version / NEXUS_TLS_MIN_VERSION: "1.2" (default) or "1.3"
+
 	// Lazy loading of large datasets (see LAZY.md). "off" (default) reads
 	// every dataset into memory when a file is first opened, exactly as
 	// before. "auto" leaves datasets with more than LazyThreshold elements
@@ -107,6 +116,9 @@ type fileConfig struct {
 	MaxFieldLimit     *int    `json:"field_max_limit"      yaml:"field_max_limit"`
 	DataDir           *string `json:"data_dir"             yaml:"data_dir"`
 	UIConfigFile      *string `json:"ui_config"            yaml:"ui_config"`
+	ServerTLSCertFile *string `json:"tls_cert_file"        yaml:"tls_cert_file"`
+	ServerTLSKeyFile  *string `json:"tls_key_file"         yaml:"tls_key_file"`
+	ServerTLSMinVer   *string `json:"tls_min_version"      yaml:"tls_min_version"`
 	LazyMode          *string `json:"lazy"                 yaml:"lazy"`
 	LazyThreshold     *int    `json:"lazy_threshold"       yaml:"lazy_threshold"`
 	MaxOpenFiles      *int    `json:"max_open_files"       yaml:"max_open_files"`
@@ -131,6 +143,10 @@ func loadConfig() (*Config, error) {
 		MaxFieldLimit:     envInt("FIELD_MAX_LIMIT", 1_000_000),
 		DataDir:           os.Getenv("NEXUS_DATA_DIR"),
 		UIConfigFile:      os.Getenv("NEXUS_UI_CONFIG"),
+
+		ServerTLSCertFile:   os.Getenv("NEXUS_TLS_CERT_FILE"),
+		ServerTLSKeyFile:    os.Getenv("NEXUS_TLS_KEY_FILE"),
+		ServerTLSMinVersion: os.Getenv("NEXUS_TLS_MIN_VERSION"),
 		LazyMode:          firstNonEmpty(os.Getenv("NEXUS_LAZY"), "off"),
 		LazyThreshold:     envInt("NEXUS_LAZY_THRESHOLD", gonexus.DefaultLazyThreshold),
 		MaxOpenFiles:      envInt("NEXUS_MAX_OPEN_FILES", 8),
@@ -166,6 +182,9 @@ func loadConfig() (*Config, error) {
 	}
 	if _, err := gonexus.ParseLazyMode(cfg.LazyMode); err != nil {
 		return nil, fmt.Errorf("NEXUS_LAZY / lazy: %w", err)
+	}
+	if err := validateServerTLS(cfg); err != nil {
+		return nil, err
 	}
 	if cfg.MaxFieldLimit <= 0 {
 		cfg.MaxFieldLimit = 1_000_000
@@ -259,6 +278,15 @@ func applyFileConfig(cfg *Config, fc *fileConfig) {
 	}
 	if fc.UIConfigFile != nil {
 		cfg.UIConfigFile = *fc.UIConfigFile
+	}
+	if fc.ServerTLSCertFile != nil {
+		cfg.ServerTLSCertFile = *fc.ServerTLSCertFile
+	}
+	if fc.ServerTLSKeyFile != nil {
+		cfg.ServerTLSKeyFile = *fc.ServerTLSKeyFile
+	}
+	if fc.ServerTLSMinVer != nil {
+		cfg.ServerTLSMinVersion = *fc.ServerTLSMinVer
 	}
 	if fc.LazyMode != nil {
 		cfg.LazyMode = *fc.LazyMode

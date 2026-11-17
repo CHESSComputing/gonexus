@@ -22,6 +22,7 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"log"
 	"net/http"
@@ -237,17 +238,36 @@ func main() {
 	mux.HandleFunc("/field", srv.handleField)
 	registerUI(mux, cfg.UIConfigFile) // browser UI at /ui/ (see ui.go)
 
+	var tlsCfg *tls.Config // nil means plain HTTP
+	if cfg.TLSEnabled() {
+		tlsCfg, err = buildTLSConfig(cfg)
+		if err != nil {
+			log.Fatalf("tls error: %v", err)
+		}
+	}
+	scheme := "http"
+	if tlsCfg != nil {
+		scheme = "https"
+	}
+
 	httpSrv := &http.Server{
 		Addr:         cfg.Addr,
+		TLSConfig:    tlsCfg,
 		Handler:      logMiddleware(mux),
 		ReadTimeout:  30 * time.Second,
 		WriteTimeout: time.Duration(cfg.WriteTimeoutSeconds) * time.Second, // 0 = no limit
 	}
 
 	go func() {
-		log.Printf("nexus-s3-server listening on %s (source=%s bucket=%s prefix=%q cache=%s lazy=%s threshold=%d max_open=%d)",
-			cfg.Addr, source, cfg.Bucket, cfg.Prefix, cfg.CacheDir, lazyMode, cfg.LazyThreshold, cfg.MaxOpenFiles)
-		if err := httpSrv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		log.Printf("nexus-s3-server listening on %s (%s, source=%s bucket=%s prefix=%q cache=%s lazy=%s threshold=%d max_open=%d)",
+			cfg.Addr, scheme, source, cfg.Bucket, cfg.Prefix, cfg.CacheDir, lazyMode, cfg.LazyThreshold, cfg.MaxOpenFiles)
+		var err error
+		if tlsCfg != nil {
+			err = httpSrv.ListenAndServeTLS("", "") // the certificate comes from tlsCfg.GetCertificate
+		} else {
+			err = httpSrv.ListenAndServe()
+		}
+		if err != nil && err != http.ErrServerClosed {
 			log.Fatalf("server error: %v", err)
 		}
 	}()

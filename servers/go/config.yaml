@@ -30,3 +30,10 @@ aws_secret: mysecret
 # Site-wide defaults for the web UI's look and feel (see UI.md). A JSON file
 # like ui/config.json; users can still override it in the UI's settings panel.
 # ui_config: /etc/gonexus/ui.json
+
+# Serve HTTPS instead of HTTP (see TLS.md). Both files are PEM; the certificate
+# file may include the intermediate chain. A renewed pair is picked up without
+# a restart. (Unrelated to the S3_TLS_* settings, which concern the S3 connection.)
+# tls_cert_file: /etc/gonexus/server.crt
+# tls_key_file: /etc/gonexus/server.key
+# tls_min_version: "1.2"      # or "1.3"
