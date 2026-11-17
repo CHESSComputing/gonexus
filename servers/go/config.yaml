@@ -10,6 +10,7 @@ field_default_limit: 10000
 field_max_limit: 1000000
 aws_access_key: myaccess
 aws_secret: mysecret
+lazy: auto
 
 # Lazy loading of big datasets (see LAZY.md). Default is off.
 # lazy: off            # off | auto | all
