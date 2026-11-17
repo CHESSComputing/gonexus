@@ -34,6 +34,18 @@ python -m gonexus_client ...                                           # same th
 
 See `examples/demo.py` for the full session example
 
+## HTTPS
+
+```python
+client = from_uri("https://host:8081")                         # certificate from a public CA
+client = from_uri("https://host:8081", verify="/path/ca.pem")  # private CA or self-signed certificate
+client = from_uri("https://host:8081", verify=False)           # no checks: testing only
+```
+Instead of `verify=` you can set `GONEXUS_CA_BUNDLE=/path/ca.pem` (this also
+covers the `gonexus-client` command). A certificate error says so and suggests
+these options. The host name or IP you connect with must be listed in the
+certificate's subject alternative names.
+
 ## Test
 
 ```bash

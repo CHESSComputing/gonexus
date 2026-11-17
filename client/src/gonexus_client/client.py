@@ -15,6 +15,10 @@ Core of gonexus_client: a small, Python client for the gonexus HTTP server.
 
 Only numpy is required; `requests` is used if installed, otherwise urllib.
 
+For an https:// server with a private or self-signed certificate, pass
+`verify="/path/to/ca.pem"` (or set GONEXUS_CA_BUNDLE); `verify=False` skips
+certificate checks and is meant for testing only.
+
 Data are transferred through  GET /field?key=&path=&offset=&limit=  in chunks.
 gonexus stores N-d datasets flat in row-major order, so slicing along the first
 axis maps to a contiguous [offset, offset+count) window and is fetched
@@ -24,11 +28,13 @@ from __future__ import annotations
 
 import json
 import os
+import ssl
 import sys
 import urllib.error
 import urllib.parse
 import urllib.request
-from typing import Any, Dict, Iterator, List, Optional, Tuple
+import warnings
+from typing import Any, Dict, Iterator, List, Optional, Tuple, Union
 
 import numpy as np
 
@@ -49,34 +55,71 @@ class GonexusError(RuntimeError):
 
 # ---------------------------------------------------------------- transport
 class _Transport:
-    def __init__(self, base_url: str, api_key: Optional[str], timeout: float):
+    def __init__(self, base_url: str, api_key: Optional[str], timeout: float,
+                 verify: Union[bool, str, None] = None):
         self.base = base_url.rstrip("/")
         self.timeout = timeout
+        # verify: True (system CAs), False (no checks), or a CA file/directory;
+        # None means "GONEXUS_CA_BUNDLE if set, else True".
+        if verify is None:
+            verify = os.environ.get("GONEXUS_CA_BUNDLE") or True
+        self.verify = verify
+        self._ssl_context: Optional[ssl.SSLContext] = None
+        if verify is False and self.base.lower().startswith("https://"):
+            warnings.warn("TLS certificate verification is disabled; do not use this outside testing",
+                          stacklevel=4)
         self.headers = {"Accept": "application/json"}
         if api_key:
             self.headers["Authorization"] = f"Apikey {api_key}"
         self.session = requests.Session() if requests else None
         if self.session:
             self.session.headers.update(self.headers)
+            self.session.verify = verify
+
+    def _context(self) -> Optional[ssl.SSLContext]:
+        """SSL context for the urllib path (None for plain http)."""
+        if not self.base.lower().startswith("https://"):
+            return None
+        if self._ssl_context is None:
+            if self.verify is False:
+                ctx = ssl.create_default_context()
+                ctx.check_hostname = False
+                ctx.verify_mode = ssl.CERT_NONE
+            elif isinstance(self.verify, str):
+                if os.path.isdir(self.verify):
+                    ctx = ssl.create_default_context(capath=self.verify)
+                else:
+                    ctx = ssl.create_default_context(cafile=self.verify)
+            else:
+                ctx = ssl.create_default_context()
+            self._ssl_context = ctx
+        return self._ssl_context
 
     def get(self, path: str, params: Optional[dict] = None, text: bool = False):
         params = {k: v for k, v in (params or {}).items() if v is not None}
         url = f"{self.base}{path}"
         try:
             if self.session:
-                r = self.session.get(url, params=params, timeout=self.timeout)
+                # verify is passed per request: requests lets REQUESTS_CA_BUNDLE /
+                # CURL_CA_BUNDLE override Session.verify, but never a request-level value
+                r = self.session.get(url, params=params, timeout=self.timeout, verify=self.verify)
                 status, body = r.status_code, r.text
             else:
                 full = url + ("?" + urllib.parse.urlencode(params) if params else "")
                 try:
                     with urllib.request.urlopen(
-                        urllib.request.Request(full, headers=self.headers), timeout=self.timeout
+                        urllib.request.Request(full, headers=self.headers), timeout=self.timeout,
+                        context=self._context(),
                     ) as resp:
                         status, body = resp.status, resp.read().decode("utf-8")
                 except urllib.error.HTTPError as e:
                     status, body = e.code, e.read().decode("utf-8", "replace")
-        except (OSError, ValueError) as e:     # connection refused, DNS, timeout...
-            raise GonexusError(f"cannot reach {url}: {e}") from e
+        except (OSError, ValueError) as e:     # connection refused, DNS, timeout, TLS...
+            hint = ""
+            if "CERTIFICATE_VERIFY_FAILED" in str(e) or "certificate verify failed" in str(e):
+                hint = (" (the server's certificate is not trusted: pass verify='/path/to/ca.pem' or set "
+                        "GONEXUS_CA_BUNDLE for a private CA, or verify=False for testing only)")
+            raise GonexusError(f"cannot reach {url}: {e}{hint}") from e
         if status >= 400:
             msg = body
             try:
@@ -375,9 +418,10 @@ class NexusFile(Group):
 class Client(_Mapping):
     """Entry point: a mapping from file key -> NexusFile."""
 
-    def __init__(self, uri: str, api_key: Optional[str] = None, timeout: float = 60.0):
+    def __init__(self, uri: str, api_key: Optional[str] = None, timeout: float = 60.0,
+                 verify: Union[bool, str, None] = None):
         self.uri = uri.rstrip("/")
-        self._tp = _Transport(self.uri, api_key or os.environ.get("GONEXUS_API_KEY"), timeout)
+        self._tp = _Transport(self.uri, api_key or os.environ.get("GONEXUS_API_KEY"), timeout, verify)
         self._files: Optional[Dict[str, dict]] = None
         self._open: Dict[str, NexusFile] = {}
 
@@ -425,6 +469,14 @@ class Client(_Mapping):
         return NexusFile(self._tp, key)
 
 
-def from_uri(uri: str, api_key: Optional[str] = None, timeout: float = 60.0) -> Client:
-    """Connect to a gonexus server, e.g. from_uri("http://localhost:8081")."""
-    return Client(uri, api_key=api_key, timeout=timeout)
+def from_uri(uri: str, api_key: Optional[str] = None, timeout: float = 60.0,
+             verify: Union[bool, str, None] = None) -> Client:
+    """Connect to a gonexus server, e.g. from_uri("http://localhost:8081").
+
+    For https:// URIs, `verify` controls certificate checking: True uses the
+    system CAs, a path to a CA file (or directory) trusts that CA - use this
+    for a private or self-signed certificate - and False disables checking
+    (testing only). The default, None, means the GONEXUS_CA_BUNDLE environment
+    variable if set, otherwise True.
+    """
+    return Client(uri, api_key=api_key, timeout=timeout, verify=verify)

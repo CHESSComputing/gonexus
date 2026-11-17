@@ -85,7 +85,15 @@ class _Handler(BaseHTTPRequestHandler):
         self._send(404, {"error": "no such endpoint"})
 
 
-def start():
+def start(certfile=None, keyfile=None):
+    """Start the fake server; with certfile/keyfile it serves HTTPS."""
     srv = ThreadingHTTPServer(("127.0.0.1", 0), _Handler)
+    scheme = "http"
+    if certfile:
+        import ssl
+        ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        ctx.load_cert_chain(certfile, keyfile)
+        srv.socket = ctx.wrap_socket(srv.socket, server_side=True)
+        scheme = "https"
     threading.Thread(target=srv.serve_forever, daemon=True).start()
-    return srv, f"http://127.0.0.1:{srv.server_address[1]}"
+    return srv, f"{scheme}://127.0.0.1:{srv.server_address[1]}"
