@@ -19,22 +19,18 @@ panel copies the effective settings, ready to paste into the site file.
 
 ## Opening a file by link
 
-`/view?file=<file>` opens the UI on a file, which makes a good link to hand to
-someone:
+`POST /view` and `POST /viewform` check an access token and then redirect to the
+UI (see `AUTH.md`); they replace the old `GET /view?file=...` link. To open a
+file without a token check (not possible in `file_system_mode`, where the UI only
+works after `/view` or `/viewform`), use the UI's address directly:
 
 ```
-http://host:8081/view?file=chess/results.nxs
-http://host:8081/view?file=chess/results.nxs&path=saxs_azimuthal/data/I
+http://host:8081/ui/#key=chess%2Fresults.nxs
+http://host:8081/ui/#key=chess%2Fresults.nxs&path=saxs_azimuthal%2Fdata%2FI
 ```
 
-`file` is the file's key as listed by `/files`; the optional `path` selects a
-group or field to show. (In `file_system_mode`, `file` is instead the file's absolute
-path on the server, e.g. `/view?file=/nfs/chess/x/scan.nxs`; see `FILESYSTEM.md`.)
-With a local `data_dir` an absolute path below that
-directory also works (`/view?file=/data/nexus/chess/results.nxs`) and is turned
-into the key. The request redirects to `/ui/#key=...&path=...`, so the address
-you end up with can be shared as well. If the file does not exist, the UI shows
-the server's error.
+`key` is the file's key as listed by `/files` (in `file_system_mode`, its
+absolute path), and the optional `path` selects a group or field to show.
 
 ## Settings
 

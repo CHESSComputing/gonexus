@@ -91,6 +91,25 @@ type Config struct {
 	// used files are deleted after a download pushes it over. 0 = no cap.
 	CacheMaxBytes int64 // cache_max_bytes / NEXUS_CACHE_MAX_BYTES (default 0)
 
+	// Access control for POST /view (see AUTH.md).
+	// ViewPayloadType selects the struct the request body is decoded into and
+	// validated with: "default" (file + token) or "foxden" (file + token + did),
+	// or the name of a payload you registered with RegisterPayload.
+	ViewPayloadType string // view_payload / NEXUS_VIEW_PAYLOAD (default "default")
+	// TokenSecret (HS256) and/or TokenPublicKeyFile (RS256, PEM) let the server
+	// check the signature of tokens. If neither is set, signatures are NOT
+	// checked (only the expiration and scopes) and the server logs a warning.
+	TokenSecret        string // token_secret / NEXUS_TOKEN_SECRET
+	TokenPublicKeyFile string // token_public_key_file / NEXUS_TOKEN_PUBLIC_KEY_FILE
+	// FoxdenURL is the FOXDEN endpoint asked to authorize a user for a dataset
+	// when ViewPayloadType is "foxden"; FoxdenTimeoutSeconds bounds that request.
+	FoxdenURL            string // foxden_url / NEXUS_FOXDEN_URL
+	FoxdenTimeoutSeconds int    // foxden_timeout / NEXUS_FOXDEN_TIMEOUT (default 10)
+
+	// SessionTTLSeconds is how long /view's permission to read a file lasts in
+	// file_system_mode (see AUTH.md).
+	SessionTTLSeconds int // session_ttl / NEXUS_SESSION_TTL (default 3600)
+
 	// aws settings
 	AccessKey string // aws_access_key / AWS_ACCESS_KEY_ID (optional)
 	SecretKey string // aws_secret / AWS_SECRET_ACCESS_KEY (optional)
@@ -134,6 +153,12 @@ type fileConfig struct {
 	WriteTimeout      *int    `json:"write_timeout"        yaml:"write_timeout"`
 	HeadTTL           *int    `json:"head_ttl"             yaml:"head_ttl"`
 	CacheMaxBytes     *int64  `json:"cache_max_bytes"      yaml:"cache_max_bytes"`
+	ViewPayloadType   *string `json:"view_payload"         yaml:"view_payload"`
+	TokenSecret       *string `json:"token_secret"         yaml:"token_secret"`
+	TokenPublicKey    *string `json:"token_public_key_file" yaml:"token_public_key_file"`
+	FoxdenURL         *string `json:"foxden_url"           yaml:"foxden_url"`
+	FoxdenTimeout     *int    `json:"foxden_timeout"       yaml:"foxden_timeout"`
+	SessionTTL        *int    `json:"session_ttl"          yaml:"session_ttl"`
 	AccessKey         *string `json:"aws_access_key" yaml:"aws_access_key"`
 	SecretKey         *string `json:"aws_secret"     yaml:"aws_secret"`
 }
@@ -164,6 +189,12 @@ func loadConfig(configPath string) (*Config, error) {
 		WriteTimeoutSeconds: envInt("NEXUS_WRITE_TIMEOUT", 600),
 		HeadTTLSeconds:      envInt("NEXUS_HEAD_TTL", 30),
 		CacheMaxBytes:       int64(envInt("NEXUS_CACHE_MAX_BYTES", 0)),
+		ViewPayloadType:      firstNonEmpty(os.Getenv("NEXUS_VIEW_PAYLOAD"), "default"),
+		TokenSecret:          os.Getenv("NEXUS_TOKEN_SECRET"),
+		TokenPublicKeyFile:   os.Getenv("NEXUS_TOKEN_PUBLIC_KEY_FILE"),
+		FoxdenURL:            os.Getenv("NEXUS_FOXDEN_URL"),
+		FoxdenTimeoutSeconds: envInt("NEXUS_FOXDEN_TIMEOUT", 10),
+		SessionTTLSeconds:    envInt("NEXUS_SESSION_TTL", 3600),
 		AccessKey:         os.Getenv("AWS_ACCESS_KEY_ID"),
 		SecretKey:         os.Getenv("AWS_SECRET_ACCESS_KEY"),
 	}
@@ -196,6 +227,9 @@ func loadConfig(configPath string) (*Config, error) {
 	if err := validateServerTLS(cfg); err != nil {
 		return nil, err
 	}
+	if err := validateViewAuth(cfg); err != nil {
+		return nil, err
+	}
 	if cfg.MaxFieldLimit <= 0 {
 		cfg.MaxFieldLimit = 1_000_000
 	}
@@ -218,6 +252,28 @@ func loadConfig(configPath string) (*Config, error) {
 		return nil, err
 	}
 	return cfg, nil
+}
+
+// validateViewAuth rejects an unusable /view access-control configuration at
+// start-up rather than on the first request.
+func validateViewAuth(cfg *Config) error {
+	cfg.ViewPayloadType = strings.ToLower(strings.TrimSpace(cfg.ViewPayloadType))
+	if cfg.ViewPayloadType == "" {
+		cfg.ViewPayloadType = "default"
+	}
+	if _, err := newPayload(cfg.ViewPayloadType); err != nil {
+		return fmt.Errorf("NEXUS_VIEW_PAYLOAD / view_payload: %w", err)
+	}
+	if cfg.ViewPayloadType == "foxden" && cfg.FoxdenURL == "" {
+		return fmt.Errorf("view_payload \"foxden\" needs foxden_url (NEXUS_FOXDEN_URL)")
+	}
+	if cfg.FoxdenTimeoutSeconds <= 0 {
+		cfg.FoxdenTimeoutSeconds = 10
+	}
+	if cfg.SessionTTLSeconds <= 0 {
+		cfg.SessionTTLSeconds = 3600
+	}
+	return nil
 }
 
 func readFileConfig(path string) (*fileConfig, error) {
@@ -307,6 +363,24 @@ func applyFileConfig(cfg *Config, fc *fileConfig) {
 	}
 	if fc.CacheMaxBytes != nil {
 		cfg.CacheMaxBytes = *fc.CacheMaxBytes
+	}
+	if fc.ViewPayloadType != nil {
+		cfg.ViewPayloadType = *fc.ViewPayloadType
+	}
+	if fc.TokenSecret != nil {
+		cfg.TokenSecret = *fc.TokenSecret
+	}
+	if fc.TokenPublicKey != nil {
+		cfg.TokenPublicKeyFile = *fc.TokenPublicKey
+	}
+	if fc.FoxdenURL != nil {
+		cfg.FoxdenURL = *fc.FoxdenURL
+	}
+	if fc.FoxdenTimeout != nil {
+		cfg.FoxdenTimeoutSeconds = *fc.FoxdenTimeout
+	}
+	if fc.SessionTTL != nil {
+		cfg.SessionTTLSeconds = *fc.SessionTTL
 	}
 	if fc.AccessKey != nil {
 		cfg.AccessKey = *fc.AccessKey

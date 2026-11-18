@@ -8,6 +8,7 @@
 #   make run          # build + run it (reads S3_* / AWS_* env vars, see below)
 #   make fmt          # gofmt -w on this directory's Go source
 #   make vet          # go vet on this directory
+#   make test         # run all tests (go test -v) in this directory
 #   make check        # fmt + vet + build
 #   make docker-build # build the Docker image (context = repo root)
 #   make docker-run   # run the Docker image
@@ -98,6 +99,10 @@ fmt:
 vet:
 	$(GO) vet $(PKG)
 
+.PHONY: test
+test:
+	$(GO) test -v $(PKG)
+
 .PHONY: check
 check: fmt vet build
 
@@ -179,6 +184,7 @@ help:
 	@echo "  run          build + run the server (reads S3_*/AWS_* env vars)"
 	@echo "  fmt          gofmt -w on this directory's .go files"
 	@echo "  vet          go vet on this directory"
+	@echo "  test         run all tests (go test -v)"
 	@echo "  check        fmt + vet + build"
 	@echo "  docker-build build the Docker image (context: repo root)"
 	@echo "  docker-run   run the Docker image (needs S3_BUCKET=...)"

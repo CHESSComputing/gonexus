@@ -5,6 +5,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/url"
 	"path/filepath"
@@ -168,30 +169,125 @@ func writeErr(w http.ResponseWriter, err error) {
 	writeJSON(w, status, map[string]string{"error": msg})
 }
 
-// handleView opens the web UI on a file:
+// maxViewBody bounds the size of a /view request body.
+const maxViewBody = 64 << 10
+
+// handleView opens the web UI on a file for a caller who proved they may:
 //
-//	GET /view?file=<path or key>[&path=<group or field>]
+//	POST /view
+//	Authorization: Bearer <token>           (or "token" in the body)
+//	{"file": "<path or key>", "token": "...", ...}
 //
-// It redirects to the UI (/ui/#key=...&path=...), which then shows the file's
-// tree and data. In filesystem mode file is the file's absolute path, such as
-// /nfs/chess/x/scan.nxs (a file:// URL is accepted too). Otherwise it is the
-// file's key as listed by /files; with a local data_dir an absolute path below
-// that directory is accepted as well and turned into the key. The optional
-// path selects a group or field to open. Nothing is read here: the file is
-// validated, and access decided, when the UI requests its data.
+// The body is decoded into the payload struct selected by view_payload
+// (ViewPayload, FoxdenViewPayload or one you registered, see AUTH.md) and
+// validated; only then is the caller redirected (303) to the UI, /ui/#key=...,
+// which shows the file's tree and data. In filesystem mode file is the file's absolute path, such
+// as /nfs/chess/x/scan.nxs (a file:// URL is accepted too). Otherwise it is
+// the file's key as listed by /files; with a local data_dir an absolute path
+// below that directory is accepted as well and turned into the key.
 func (s *server) handleView(w http.ResponseWriter, r *http.Request) {
-	q := r.URL.Query()
-	file := strings.TrimSpace(q.Get("file"))
-	if file == "" {
-		http.Redirect(w, r, "/ui/", http.StatusFound)
+	s.serveView(w, r, false)
+}
+
+// handleViewForm is /view for other services: the same checks and redirect,
+// but the payload comes from a web form (application/x-www-form-urlencoded or
+// multipart/form-data) whose field names are the payload's JSON names, e.g.
+//
+//	curl -d file=/nfs/chess/x/scan.nxs -d token=$TOKEN http://host:8081/viewform
+//
+// The token is taken from the form only, not from a header. Form fields in the
+// URL query are ignored, so a token cannot end up in a logged URL by accident.
+func (s *server) handleViewForm(w http.ResponseWriter, r *http.Request) {
+	s.serveView(w, r, true)
+}
+
+// serveView implements /view (JSON body) and /viewform (form body).
+func (s *server) serveView(w http.ResponseWriter, r *http.Request, form bool) {
+	if r.Method != http.MethodPost {
+		w.Header().Set("Allow", http.MethodPost)
+		writeErr(w, &apiError{status: http.StatusMethodNotAllowed, msg: "use POST with a JSON body"})
 		return
 	}
-	v := url.Values{}
-	v.Set("key", s.viewKey(file))
-	if p := strings.Trim(strings.TrimSpace(q.Get("path")), "/"); p != "" {
-		v.Set("path", p)
+	payload, err := s.authorizeView(w, r, form)
+	if err != nil {
+		var ae *apiError
+		if !errors.As(err, &ae) {
+			ae = forbidden("%v", err) // a plain error from a custom Validate
+		}
+		if ae.status == http.StatusUnauthorized {
+			w.Header().Set("WWW-Authenticate", `Bearer realm="gonexus"`)
+		}
+		writeErr(w, ae)
+		return
 	}
-	http.Redirect(w, r, "/ui/#"+v.Encode(), http.StatusFound)
+
+	// Validated: open the web UI on the file. 303 makes a browser follow with
+	// a GET even though the request was a POST. Nothing is read here; the UI
+	// requests the file's data and any problem with the file shows up there.
+	key := s.viewKey(strings.TrimSpace(payload.GetFile()))
+	if s.cfg.FileSystemMode {
+		if s.sessions == nil {
+			writeErr(w, internal("view sessions are not configured"))
+			return
+		}
+		s.sessions.grant(w, r, key) // lets the UI read this file (session.go)
+	}
+	v := url.Values{}
+	v.Set("key", key)
+	http.Redirect(w, r, "/ui/#"+v.Encode(), http.StatusSeeOther)
+}
+
+// authorizeView reads the payload of a /view request, adds the token from the
+// Authorization header and validates it. It returns the payload only if the
+// caller may open the file it names.
+func (s *server) authorizeView(w http.ResponseWriter, r *http.Request, form bool) (UserPayload, error) {
+	if s.auth == nil {
+		return nil, internal("access control is not configured")
+	}
+	payload, err := newPayload(s.cfg.ViewPayloadType)
+	if err != nil {
+		return nil, internal("%v", err)
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, maxViewBody)
+	if form {
+		if err := decodeForm(r, payload); err != nil {
+			return nil, badRequest("invalid form payload: %v", err)
+		}
+	} else {
+		if err := json.NewDecoder(r.Body).Decode(payload); err != nil {
+			return nil, badRequest("invalid JSON payload: %v", err)
+		}
+		if tok := bearerToken(r); tok != "" {
+			payload.SetToken(tok) // the header wins over a token in the body
+		}
+	}
+	if strings.TrimSpace(payload.GetFile()) == "" {
+		return nil, badRequest("missing required field 'file'")
+	}
+	if err := payload.Validate(r.Context(), s.auth); err != nil {
+		return nil, err
+	}
+	return payload, nil
+}
+
+// decodeForm fills payload from the body fields of a form request. Field names
+// are the payload's JSON names, so any registered payload works unchanged;
+// fields are single strings, and unknown fields are ignored.
+func decodeForm(r *http.Request, payload UserPayload) error {
+	if err := r.ParseMultipartForm(maxViewBody); err != nil && !errors.Is(err, http.ErrNotMultipart) {
+		return err
+	}
+	fields := make(map[string]string, len(r.PostForm))
+	for k, v := range r.PostForm { // PostForm: body only, never the URL query
+		if len(v) > 0 {
+			fields[k] = v[0]
+		}
+	}
+	raw, err := json.Marshal(fields)
+	if err != nil {
+		return err
+	}
+	return json.Unmarshal(raw, payload)
 }
 
 // viewKey turns the file parameter of /view into a file key. In filesystem

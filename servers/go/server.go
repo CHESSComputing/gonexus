@@ -201,6 +201,9 @@ type server struct {
 	cfg   *Config
 	store FileStore
 	trees *treeCache
+	auth  *AuthEnv // validates /view payloads (see auth.go)
+
+	sessions *viewSessions // file_system_mode only: who may read which file (see session.go)
 }
 
 // mode names where files come from: "filesystem" (absolute paths), "local"
@@ -220,12 +223,13 @@ func (s *server) mode() string {
 func (s *server) routes() *http.ServeMux {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", s.handleHealthz)
-	mux.HandleFunc("/files", s.handleFiles)
-	mux.HandleFunc("/tree", s.handleTree)
-	mux.HandleFunc("/entries", s.handleEntries)
-	mux.HandleFunc("/group", s.handleGroup)
-	mux.HandleFunc("/field", s.handleField)
+	mux.HandleFunc("/files", s.guardListing(s.handleFiles))
+	mux.HandleFunc("/tree", s.guardData(s.handleTree))
+	mux.HandleFunc("/entries", s.guardData(s.handleEntries))
+	mux.HandleFunc("/group", s.guardData(s.handleGroup))
+	mux.HandleFunc("/field", s.guardData(s.handleField))
 	mux.HandleFunc("/view", s.handleView)
+	mux.HandleFunc("/viewform", s.handleViewForm)
 	registerUI(mux, s.cfg.UIConfigFile)
 	return mux
 }
@@ -265,7 +269,20 @@ func Server(cfg *Config) {
 	}
 	trees := newTreeCache(gonexus.LoadOptions{Mode: lazyMode, Threshold: cfg.LazyThreshold}, cfg.MaxOpenFiles)
 	store.SetOnFileChanged(trees.invalidate) // drop parsed trees of replaced/evicted/modified files
-	srv := &server{cfg: cfg, store: store, trees: trees}
+	auth, err := newAuthEnv(cfg)
+	if err != nil {
+		log.Fatalf("auth error: %v", err)
+	}
+	if auth.Verifier == nil {
+		log.Printf("warning: neither token_secret nor token_public_key_file is set, so token signatures are NOT verified and anyone can forge a token for /view (see AUTH.md)")
+	}
+	srv := &server{cfg: cfg, store: store, trees: trees, auth: auth}
+	if cfg.FileSystemMode {
+		srv.sessions, err = newViewSessions(time.Duration(cfg.SessionTTLSeconds) * time.Second)
+		if err != nil {
+			log.Fatalf("session key error: %v", err)
+		}
+	}
 
 	mux := srv.routes()
 
@@ -290,8 +307,8 @@ func Server(cfg *Config) {
 	}
 
 	go func() {
-		log.Printf("nexus-s3-server listening on %s (%s, source=%s bucket=%s prefix=%q cache=%s lazy=%s threshold=%d max_open=%d)",
-			cfg.Addr, scheme, source, cfg.Bucket, cfg.Prefix, cfg.CacheDir, lazyMode, cfg.LazyThreshold, cfg.MaxOpenFiles)
+		log.Printf("nexus-s3-server listening on %s (%s, source=%s bucket=%s prefix=%q cache=%s lazy=%s threshold=%d max_open=%d view_payload=%s)",
+			cfg.Addr, scheme, source, cfg.Bucket, cfg.Prefix, cfg.CacheDir, lazyMode, cfg.LazyThreshold, cfg.MaxOpenFiles, cfg.ViewPayloadType)
 		var err error
 		if tlsCfg != nil {
 			err = httpSrv.ListenAndServeTLS("", "") // the certificate comes from tlsCfg.GetCertificate

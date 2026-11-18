@@ -92,7 +92,9 @@ func TestFSStoreAccessDecisions(t *testing.T) {
 		{"path outside the area", j(f.outside, "secret.nxs"), 403},
 		{"relative path", "a/scan1.nxs", 400},
 		{"empty", "", 400},
-		{"dot-dot is refused, not cleaned", j(f.allowed, "..", "outside", "secret.nxs"), 400},
+		// Not built with filepath.Join: Join cleans the ".." away, and the store
+		// would never see it.
+		{"dot-dot is refused, not cleaned", f.allowed + "/../outside/secret.nxs", 400},
 		{"not a NeXus file name", j(f.allowed, "a", "notes.txt"), 400},
 		{"a directory", j(f.allowed, "a"), 400},
 		{"missing file", j(f.allowed, "a", "missing.nxs"), 404},
@@ -271,18 +273,16 @@ func TestFSStoreChangeNotification(t *testing.T) {
 }
 
 func TestFSModeViewKeepsTheAbsolutePath(t *testing.T) {
-	cases := []struct {
-		query url.Values
-		want  string
-	}{
-		{url.Values{"file": {"/nfs/chess/x/scan.nxs"}}, "/ui/#key=%2Fnfs%2Fchess%2Fx%2Fscan.nxs"},
-		{url.Values{"file": {"file:///nfs/chess/x/scan.nxs"}}, "/ui/#key=%2Fnfs%2Fchess%2Fx%2Fscan.nxs"},
-		{url.Values{"file": {"/nfs/a b/c#1.nxs"}, "path": {"entry/data"}}, "/ui/#key=%2Fnfs%2Fa+b%2Fc%231.nxs&path=entry%2Fdata"},
-		{url.Values{"file": {"/nfs/x/../y.nxs"}}, "/ui/#key=%2Fnfs%2Fx%2F..%2Fy.nxs"},
+	s := &server{cfg: &Config{FileSystemMode: true, DataDir: "/nfs"}}
+	cases := []struct{ file, want string }{
+		{"/nfs/chess/x/scan.nxs", "/nfs/chess/x/scan.nxs"},
+		{"file:///nfs/chess/x/scan.nxs", "/nfs/chess/x/scan.nxs"},
+		{"/nfs/a b/c#1.nxs", "/nfs/a b/c#1.nxs"},
+		{"/nfs/x/../y.nxs", "/nfs/x/../y.nxs"},
 	}
 	for _, tc := range cases {
-		if got := viewLocation(t, &Config{FileSystemMode: true, DataDir: "/nfs"}, tc.query); got != tc.want {
-			t.Errorf("%v: Location = %q, want %q", tc.query, got, tc.want)
+		if got := s.viewKey(tc.file); got != tc.want {
+			t.Errorf("%q: key = %q, want %q", tc.file, got, tc.want)
 		}
 	}
 }

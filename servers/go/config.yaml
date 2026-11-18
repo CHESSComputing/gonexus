@@ -1,5 +1,7 @@
 #data_dir: /Users/vk/Work/CHESS/FOXDEN/s3/nexus-data
 data_dir: /tmp
+view_payload: foxden
+foxden_url: http://localhost:8344/validate/gonexus
 file_system_mode: true
 s3_bucket: nexus-data
 s3_prefix: chess/
@@ -46,3 +48,12 @@ lazy: auto
 # directories that may be read, separated by ":" (empty = everything readable).
 # file_system_mode: true
 # data_dir: /nfs
+
+# Access control of POST /view (see AUTH.md).
+# view_payload: default      # default (file+token) | foxden (file+token+did) | your own registered payload
+# token_secret: change-me    # HS256 shared secret; or:
+# token_public_key_file: /etc/gonexus/authz.pub   # RS256 PEM. Neither set = signatures NOT verified
+# foxden_url: https://foxden.example.org/authz/access   # required for view_payload: foxden
+# foxden_timeout: 10         # seconds
+# file_system_mode only: how long (seconds) /view's permission to read a file lasts.
+# session_ttl: 3600

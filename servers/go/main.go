@@ -14,7 +14,8 @@
 //	GET /entries?key=...                        top-level NXentry groups
 //	GET /group?key=...&path=...                 a group's direct children
 //	GET /field?key=...&path=...&offset=&limit=  a field's metadata + data
-//	GET /view?file=...[&path=...]               open the web UI on a file (redirect)
+//	POST /view                                  open the UI on a file for a valid token (see AUTH.md)
+//	POST /viewform                              the same, payload and token from a web form
 //	GET /ui/                                    interactive web UI (embedded)
 //
 // See ../README.md for configuration (all via environment variables) and

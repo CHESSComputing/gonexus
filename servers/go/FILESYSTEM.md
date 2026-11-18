@@ -4,10 +4,11 @@ Use this mode when the data you want to show live in many unrelated places on
 the server's filesystem (for example under `/nfs/...`) and cannot be gathered
 under one directory. A file's **key is its absolute path**, so a record that
 says "the data are in `/nfs/chess/id4b/2026-2/scan7.nxs`" can be turned straight
-into a link:
+into a request:
 
-```
-http://gonexus-host:8081/view?file=/nfs/chess/id4b/2026-2/scan7.nxs
+```bash
+curl -L -X POST http://gonexus-host:8081/view -H "Authorization: Bearer $TOKEN" \
+     -d '{"file": "/nfs/chess/id4b/2026-2/scan7.nxs"}'
 ```
 
 ```yaml
@@ -38,19 +39,13 @@ curl -G localhost:8081/field --data-urlencode 'key=/nfs/chess/id4b/scan7.nxs' --
      --data-urlencode offset=0 --data-urlencode limit=300
 ```
 
-`/view?file=<path>[&path=<group or field>]` redirects to the web UI with that
-file (and node) open. A `file://` URL is accepted too. **URL-encode the path
-when building a link**, since paths may contain spaces, `#`, `&` or `+`:
+`POST /view` takes the path in a JSON body together with an access token and
+redirects to the web UI on that file if the token is valid; see `AUTH.md`. A `file://` URL is
+accepted too. To open a file in the web UI use
+`http://gonexus-host:8081/ui/#key=<url-encoded path>`:
 
-```python
-from urllib.parse import quote            # Python
-url = "http://gonexus-host:8081/view?file=" + quote(path, safe="/")
-```
-```go
-u := "http://gonexus-host:8081/view?file=" + url.QueryEscape(path)   // Go
-```
 ```js
-const u = "http://gonexus-host:8081/view?file=" + encodeURIComponent(path);  // JavaScript
+const u = "http://gonexus-host:8081/ui/#key=" + encodeURIComponent(path);  // JavaScript
 ```
 
 The Python client works as well: `client.open("/nfs/chess/id4b/scan7.nxs")["entry/data/I"][10:20]`.
@@ -74,10 +69,13 @@ For every request naming a file, in this order:
 
 ## Security: read this before enabling it
 
+* **In this mode files can only be opened through `/view` or `/viewform`, which
+  require a token; `/tree`, `/group`, `/field` and `/entries` accept only a client
+  that passed one of them for that file, and `/files` is disabled (`AUTH.md`).**
 * **The server reads files with its own permissions, not the viewer's.**
   Anyone who can reach the server can open every NeXus file in the allowed
   directories that the server's user can read, whatever their own account
-  or their access rights in FOXDEN allow. gonexus has no authentication.
+  or their access rights in FOXDEN allow. gonexus does not know the viewer: a token only proves the right to read.
 * Therefore: **set `data_dir`** (without it, *any* readable NeXus/HDF5 file on
   the machine can be opened, and the server logs a warning at startup); run the
   server as a dedicated unprivileged user that has read access only to the data
@@ -105,7 +103,7 @@ prefix.
 
 ## In the web UI
 
-Open a file by link (`/view?file=...`), or paste a full path into the file box
+Open a file by link (`/ui/#key=...`), or paste a full path into the file box
 and press Enter. As you type an absolute path the box asks the server for the
 NeXus files below it, so typing `/nfs/chess/` and then a few letters narrows the
 list like a path completion; the box shows the server's message if a directory

@@ -67,6 +67,7 @@ curl "http://localhost:8081/tree?key=chess/edd_test.nxs"
 | `main.go` | `main()` and the command-line flags (`-config`, `-version`) |
 | `server.go` | server definition, routes, `Server()` start-up, parsed-tree cache, `Info()` |
 | `handlers.go` | all HTTP handlers and their helpers |
+| `auth.go` | `/view` access control: token (JWT) checks, `UserPayload`, `ViewPayload`, `FoxdenViewPayload` (see `AUTH.md`) |
 | `config.go` | Environment-variable configuration |
 | `s3store.go` | S3 listing + ETag-based local disk cache |
 | `nexusview.go` | Turns a `*gonexus.NXgroup` into the JSON shapes in `../README.md` |
@@ -91,7 +92,8 @@ GET /tree?key=...                           full tree, text/plain
 GET /entries?key=...                        top-level NXentry groups
 GET /group?key=...&path=...                 a group's direct children
 GET /field?key=...&path=...&offset=&limit=  a field's metadata + data
-GET /view?file=...[&path=...]               open the web UI on a file
+POST /view                                  open the UI on a file, needs a token (see AUTH.md)
+POST /viewform                              the same, payload and token from a web form
 ```
 
 ## Tests
