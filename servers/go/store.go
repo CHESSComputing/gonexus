@@ -2,10 +2,12 @@ package main
 
 import "context"
 
-// FileStore is where the server gets NeXus files from. There are two
+// FileStore is where the server gets NeXus files from. There are three
 // implementations: *Store (an S3 bucket, files are downloaded into a local
-// cache) and *LocalStore (a directory on the server's filesystem, files are
-// opened in place).
+// cache), *LocalStore (a directory on the server's filesystem addressed by
+// keys relative to it, files are opened in place) and *FSStore (any path on
+// the server's filesystem, addressed by absolute path, optionally restricted
+// to allowed directories).
 type FileStore interface {
 	// List returns the NeXus files whose key starts with the store's
 	// prefix, or with prefixOverride when it is non-empty.
@@ -24,4 +26,5 @@ type FileStore interface {
 var (
 	_ FileStore = (*Store)(nil)
 	_ FileStore = (*LocalStore)(nil)
+	_ FileStore = (*FSStore)(nil)
 )

@@ -19,6 +19,10 @@ func badRequest(format string, args ...interface{}) *apiError {
 	return &apiError{status: 400, msg: fmt.Sprintf(format, args...)}
 }
 
+func forbidden(format string, args ...interface{}) *apiError {
+	return &apiError{status: 403, msg: fmt.Sprintf(format, args...)}
+}
+
 func notFound(format string, args ...interface{}) *apiError {
 	return &apiError{status: 404, msg: fmt.Sprintf(format, args...)}
 }

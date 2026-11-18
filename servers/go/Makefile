@@ -3,7 +3,8 @@
 # Common usage:
 #   make deps         # one-time: install libhdf5-dev (Linux) via apt, or
 #                      # print instructions for other platforms
-#   make build        # build bin/nexus-s3-server
+#   make build        # build bin/nexus-s3-server, stamped with the latest git tag
+#                      # (shown by `bin/nexus-s3-server -version`)
 #   make run          # build + run it (reads S3_* / AWS_* env vars, see below)
 #   make fmt          # gofmt -w on this directory's Go source
 #   make vet          # go vet on this directory
@@ -29,6 +30,11 @@ REPO_ROOT:= ../..
 
 IMAGE    ?= nexus-s3-server-go
 PORT     ?= 8081
+
+# Version stamping: the latest git tag (without a leading "v") replaces the
+# VERSION placeholder in server.go for the duration of the build (see Info()
+# there). Without any git tag the binary reports git=dev.
+TAG := $(shell git tag 2>/dev/null | sed -e "s,^v,," | sort -V -r | head -n 1)
 
 # HDF5 is a cgo dependency of gonexus; its headers/libs often aren't on
 # the default search path, so detect common package managers and point
@@ -71,7 +77,14 @@ deps:
 .PHONY: build
 build:
 	mkdir -p $(BIN_DIR)
+ifdef TAG
+	@echo "building version $(TAG)"
+	cp server.go server.go.orig
+	sed -i.bak -e "s,{{VERSION}},$(TAG),g" server.go && rm -f server.go.bak
+	$(GO) build -o $(BINARY) $(PKG); rc=$$?; mv server.go.orig server.go; exit $$rc
+else
 	$(GO) build -o $(BINARY) $(PKG)
+endif
 
 .PHONY: run
 run: build

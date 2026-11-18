@@ -54,6 +54,7 @@ bin/nexus-s3-server -config config.yaml
 ```
 
 ```bash
+bin/nexus-s3-server -version     # git tag, Go version (see `make build`)
 curl http://localhost:8081/healthz
 curl http://localhost:8081/files
 curl "http://localhost:8081/tree?key=chess/edd_test.nxs"
@@ -63,20 +64,19 @@ curl "http://localhost:8081/tree?key=chess/edd_test.nxs"
 
 | File | Purpose |
 |---|---|
-| `main.go` | HTTP server, routing, request handlers |
+| `main.go` | `main()` and the command-line flags (`-config`, `-version`) |
+| `server.go` | server definition, routes, `Server()` start-up, parsed-tree cache, `Info()` |
+| `handlers.go` | all HTTP handlers and their helpers |
 | `config.go` | Environment-variable configuration |
 | `s3store.go` | S3 listing + ETag-based local disk cache |
 | `nexusview.go` | Turns a `*gonexus.NXgroup` into the JSON shapes in `../README.md` |
 | `errors.go` | Small `apiError` type carrying an HTTP status code |
 
-`main.go` also keeps a small in-process cache of parsed `*gonexus.NXgroup`
-trees keyed by local cache path, so repeated requests against the same
-file (browsing around one dataset) don't re-parse the HDF5 file on every
-call. It's invalidated implicitly whenever `Store.Ensure` downloads a new
-copy of the object (a new local path is used, since the file is
-re-cached under the same path but the in-memory tree for the *old*
-content is simply left to be garbage collected — see the comment on
-`treeCache` for the exact behavior).
+`server.go` also keeps a small in-process cache of parsed `*gonexus.NXgroup`
+trees keyed by local file path, so repeated requests against the same file
+(browsing around one dataset) don't re-parse the HDF5 file on every call. A
+tree is dropped when its file is replaced, modified or evicted from the disk
+cache (see the comment on `treeCache` for the exact behavior).
 
 ## APIs
 gonexus HTTP server provides the following set of end-points to access NeXus
@@ -91,6 +91,7 @@ GET /tree?key=...                           full tree, text/plain
 GET /entries?key=...                        top-level NXentry groups
 GET /group?key=...&path=...                 a group's direct children
 GET /field?key=...&path=...&offset=&limit=  a field's metadata + data
+GET /view?file=...[&path=...]               open the web UI on a file
 ```
 
 ## Tests

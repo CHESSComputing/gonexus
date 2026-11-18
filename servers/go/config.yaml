@@ -1,4 +1,6 @@
-data_dir: /Users/vk/Work/CHESS/FOXDEN/s3/nexus-data
+#data_dir: /Users/vk/Work/CHESS/FOXDEN/s3/nexus-data
+data_dir: /tmp
+file_system_mode: true
 s3_bucket: nexus-data
 s3_prefix: chess/
 s3_region: us-east-1
@@ -38,3 +40,9 @@ lazy: auto
 # tls_cert_file: /etc/gonexus/server.crt
 # tls_key_file: /etc/gonexus/server.key
 # tls_min_version: "1.2"      # or "1.3"
+
+# Serve files by absolute path anywhere on this machine (see FILESYSTEM.md), e.g.
+# http://host:8081/view?file=/nfs/chess/x/scan.nxs . data_dir then lists the
+# directories that may be read, separated by ":" (empty = everything readable).
+# file_system_mode: true
+# data_dir: /nfs

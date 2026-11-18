@@ -819,6 +819,7 @@ async function openFile(key, path) {
 async function loadFiles() {
   try {
     const r = await api('/files');
+    FileCombo.setMode(r.mode || '');
     FileCombo.setFiles(r.files || []);
     return r.files || [];
   } catch (e) { status('Could not list files: ' + e.message, true); return []; }
@@ -834,6 +835,7 @@ const FileCombo = (() => {
   const list = h('div', { id: 'fileListbox', class: 'listbox hidden', role: 'listbox' });
   document.body.append(list);
   let files = [], shown = [], active = -1, isOpen = false, filtering = false;
+  let mode = '', note = '', browseTimer = 0, browseSeq = 0;   // mode: 'filesystem' lists a directory as you type
 
   const cfg = () => CFG.fileList;
   const query = () => filtering ? input.value.trim().toLowerCase() : '';
@@ -843,6 +845,34 @@ const FileCombo = (() => {
     if (!q) return [text];
     const i = cfg().match === 'prefix' ? (text.toLowerCase().startsWith(q) ? 0 : -1) : text.toLowerCase().indexOf(q);
     return i < 0 ? [text] : [text.slice(0, i), h('mark', null, text.slice(i, i + q.length)), text.slice(i + q.length)];
+  }
+
+  function emptyMessage() {
+    if (mode === 'filesystem') {
+      return files.length ? 'No matching files – press Enter to open this path anyway'
+                          : 'Type a directory such as /nfs/chess/ to list its NeXus files, or paste a full file path and press Enter';
+    }
+    return files.length ? 'No matching files – press Enter to open this key anyway' : 'The server lists no files';
+  }
+
+  /* Filesystem mode: the server lists nothing until it is given a directory
+   * (a prefix), so ask for it as the person types an absolute path. */
+  function browse() {
+    clearTimeout(browseTimer);
+    const v = input.value.trim();
+    if (mode !== 'filesystem' || v.length < 2 || !v.startsWith('/')) return;
+    browseTimer = setTimeout(async () => {
+      const mine = ++browseSeq;
+      try {
+        const r = await api('/files', { prefix: v });
+        if (mine !== browseSeq) return;       // a newer request is under way
+        files = r.files || []; note = '';
+      } catch (e) {
+        if (mine !== browseSeq) return;
+        files = []; note = e.message;
+      }
+      if (isOpen) { render(); position(); }
+    }, 250);
   }
 
   function render() {
@@ -863,7 +893,7 @@ const FileCombo = (() => {
                                      : `${files.length} file${files.length === 1 ? '' : 's'}`),
       ...rows,
       items.length > shown.length ? h('div', { class: 'lb-more' }, `… ${items.length - shown.length} more – keep typing to narrow the list`) : null,
-      !items.length ? h('div', { class: 'lb-empty' }, files.length ? 'No matching files – press Enter to open this key anyway' : 'The server lists no files') : null);
+      !items.length ? h('div', { class: 'lb-empty' }, note || emptyMessage()) : null);
   }
 
   /* Place the list relative to the box, entirely inside the viewport. */
@@ -914,7 +944,7 @@ const FileCombo = (() => {
   function choose(f) { input.value = f.key; updateClear(); close(); openFile(f.key); }
 
   input.addEventListener('click', () => { input.select(); open(false); });   // click: select the name, show ALL files
-  input.addEventListener('input', () => { updateClear(); open(true); });     // typing: filter
+  input.addEventListener('input', () => { note = ''; updateClear(); open(true); browse(); });   // typing: filter
   input.addEventListener('keydown', e => {
     if (e.key === 'ArrowDown') { move(1); e.preventDefault(); }
     else if (e.key === 'ArrowUp') { move(-1); e.preventDefault(); }
@@ -940,7 +970,12 @@ const FileCombo = (() => {
 
   const refresh = () => { if (isOpen) { render(); position(); } };
   return {
-    setFiles(f) { files = f || []; refresh(); },
+    setFiles(f) { files = f || []; note = ''; refresh(); },
+    setMode(m) {
+      mode = m;
+      input.placeholder = m === 'filesystem' ? 'Paste a full path, e.g. /nfs/chess/.../scan.nxs'
+                                              : 'Select or type file key, e.g. chess/results.nxs';
+    },
     setValue(v) { input.value = v; updateClear(); },
     refresh, close,
   };

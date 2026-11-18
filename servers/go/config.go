@@ -3,7 +3,6 @@ package main
 
 import (
 	"encoding/json"
-	"flag"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -47,6 +46,15 @@ type Config struct {
 	// are opened in place with no copy into CacheDir, and the S3 settings
 	// are not used. S3Prefix still selects which keys /files lists.
 	DataDir string // data_dir / NEXUS_DATA_DIR (default "": use S3)
+
+	// FileSystemMode makes the server open files by their absolute path on
+	// its filesystem (see FILESYSTEM.md): a file's key is its path, such as
+	// /nfs/chess/x/scan.nxs, so data scattered over many places can be served
+	// where they are. Access is limited by the server user's file permissions
+	// and, if DataDir is set, to the directories it lists (several can be
+	// given, separated by ":"); in this mode DataDir is an allow-list, not
+	// the root that keys are relative to. S3 is not used.
+	FileSystemMode bool // file_system_mode / NEXUS_FILE_SYSTEM_MODE (default false)
 
 	// UIConfigFile is an optional JSON file with site-wide defaults for the
 	// web UI's look and feel, served as /ui/config.json (see UI.md).
@@ -115,6 +123,7 @@ type fileConfig struct {
 	DefaultFieldLimit *int    `json:"field_default_limit"  yaml:"field_default_limit"`
 	MaxFieldLimit     *int    `json:"field_max_limit"      yaml:"field_max_limit"`
 	DataDir           *string `json:"data_dir"             yaml:"data_dir"`
+	FileSystemMode    *bool   `json:"file_system_mode"     yaml:"file_system_mode"`
 	UIConfigFile      *string `json:"ui_config"            yaml:"ui_config"`
 	ServerTLSCertFile *string `json:"tls_cert_file"        yaml:"tls_cert_file"`
 	ServerTLSKeyFile  *string `json:"tls_key_file"         yaml:"tls_key_file"`
@@ -129,7 +138,7 @@ type fileConfig struct {
 	SecretKey         *string `json:"aws_secret"     yaml:"aws_secret"`
 }
 
-func loadConfig() (*Config, error) {
+func loadConfig(configPath string) (*Config, error) {
 	// 1. Env vars + defaults (the fallback layer).
 	cfg := &Config{
 		Bucket:            os.Getenv("S3_BUCKET"),
@@ -142,6 +151,7 @@ func loadConfig() (*Config, error) {
 		DefaultFieldLimit: envInt("FIELD_DEFAULT_LIMIT", 10_000),
 		MaxFieldLimit:     envInt("FIELD_MAX_LIMIT", 1_000_000),
 		DataDir:           os.Getenv("NEXUS_DATA_DIR"),
+		FileSystemMode:    envBool("NEXUS_FILE_SYSTEM_MODE", false),
 		UIConfigFile:      os.Getenv("NEXUS_UI_CONFIG"),
 
 		ServerTLSCertFile:   os.Getenv("NEXUS_TLS_CERT_FILE"),
@@ -159,7 +169,7 @@ func loadConfig() (*Config, error) {
 	}
 
 	// 2. Config file (JSON or YAML), if any, overrides the above.
-	path := configFilePath()
+	path := firstNonEmpty(configPath, os.Getenv("CONFIG_FILE"))
 	if path != "" {
 		fc, err := readFileConfig(path)
 		if err != nil {
@@ -177,8 +187,8 @@ func loadConfig() (*Config, error) {
 		os.Setenv("AWS_SECRET_ACCESS_KEY", cfg.SecretKey)
 	}
 
-	if cfg.Bucket == "" && cfg.DataDir == "" {
-		return nil, errRequiredEnv("S3_BUCKET (or s3_bucket in config file), or NEXUS_DATA_DIR (data_dir) to serve a local directory")
+	if cfg.Bucket == "" && cfg.DataDir == "" && !cfg.FileSystemMode {
+		return nil, errRequiredEnv("S3_BUCKET (or s3_bucket in config file), NEXUS_DATA_DIR (data_dir) to serve a local directory, or NEXUS_FILE_SYSTEM_MODE (file_system_mode) to serve files by path")
 	}
 	if _, err := gonexus.ParseLazyMode(cfg.LazyMode); err != nil {
 		return nil, fmt.Errorf("NEXUS_LAZY / lazy: %w", err)
@@ -208,17 +218,6 @@ func loadConfig() (*Config, error) {
 		return nil, err
 	}
 	return cfg, nil
-}
-
-// configFilePath resolves the config file location: -config flag takes
-// priority over CONFIG_FILE env var. Returns "" if neither is set.
-func configFilePath() string {
-	var flagPath string
-	if !flag.Parsed() {
-		flag.StringVar(&flagPath, "config", "", "path to config file (JSON or YAML)")
-		flag.Parse()
-	}
-	return firstNonEmpty(flagPath, os.Getenv("CONFIG_FILE"))
 }
 
 func readFileConfig(path string) (*fileConfig, error) {
@@ -275,6 +274,9 @@ func applyFileConfig(cfg *Config, fc *fileConfig) {
 	}
 	if fc.DataDir != nil {
 		cfg.DataDir = *fc.DataDir
+	}
+	if fc.FileSystemMode != nil {
+		cfg.FileSystemMode = *fc.FileSystemMode
 	}
 	if fc.UIConfigFile != nil {
 		cfg.UIConfigFile = *fc.UIConfigFile

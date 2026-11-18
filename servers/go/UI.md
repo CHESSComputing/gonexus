@@ -17,6 +17,25 @@ for its look and feel. Settings are layered; later layers win:
 Unknown keys and values of the wrong type are ignored. *Copy as JSON* in the
 panel copies the effective settings, ready to paste into the site file.
 
+## Opening a file by link
+
+`/view?file=<file>` opens the UI on a file, which makes a good link to hand to
+someone:
+
+```
+http://host:8081/view?file=chess/results.nxs
+http://host:8081/view?file=chess/results.nxs&path=saxs_azimuthal/data/I
+```
+
+`file` is the file's key as listed by `/files`; the optional `path` selects a
+group or field to show. (In `file_system_mode`, `file` is instead the file's absolute
+path on the server, e.g. `/view?file=/nfs/chess/x/scan.nxs`; see `FILESYSTEM.md`.)
+With a local `data_dir` an absolute path below that
+directory also works (`/view?file=/data/nexus/chess/results.nxs`) and is turned
+into the key. The request redirects to `/ui/#key=...&path=...`, so the address
+you end up with can be shared as well. If the file does not exist, the UI shows
+the server's error.
+
 ## Settings
 
 | key | default | meaning |
