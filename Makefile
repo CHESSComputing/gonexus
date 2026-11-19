@@ -36,7 +36,7 @@ ifeq ($(UNAME_S),Darwin)
 endif
 
 .PHONY: all
-all: build
+all: build changes
 
 # ---------------------------------------------------------------------------
 # System dependencies (the HDF5 C library gonum.org/v1/hdf5 links against)
@@ -103,6 +103,10 @@ examples: tidy
 	mkdir -p $(BIN_DIR)
 	$(GO) build -o $(BIN_DIR)/gonexus-io-example ./examples/io
 	$(GO) build -o $(BIN_DIR)/gonexus-reader-example ./examples/reader
+
+changes:
+	./changes.sh
+	./last_changes.sh
 
 # ---------------------------------------------------------------------------
 # Housekeeping
