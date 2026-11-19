@@ -60,7 +60,6 @@ jobs:
 
       - name: Build image for local scan
         run: |
-          make golib
           # use multi-stage build to run on mac ARM:
           # https://stackoverflow.com/questions/71000707/docker-get-started-warning-the-requested-images-platform-linux-arm64-v8-doe
           # https://github.com/docker/for-mac/issues/6356
