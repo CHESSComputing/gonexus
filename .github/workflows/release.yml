@@ -46,9 +46,11 @@ jobs:
           CGO_CFLAGS: "-I/usr/include/hdf5/serial"
           CGO_LDFLAGS: "-L/usr/lib/x86_64-linux-gnu/hdf5/serial"
         run: |
+          cd servers/go
           make
-          make test
-          tar cvfz gonexus.tar.gz servers/go/bin/{nexus-s3-server,manage_gonexus,config.yaml}
+          tar cvfz ../../gonexus.tar.gz nexus-s3-server manage_gonexus config.yaml
+          cd -
+
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
