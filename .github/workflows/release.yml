@@ -42,11 +42,19 @@ jobs:
 #         echo ${{ steps.branch_name.outputs.SOURCE_TAG }}
 
     - name: Build
-      env:
-        GOPATH: /home/runner/go
-      run: |
-        make
-        tar cvfz gonexus.tar.gz srv*
+      - name: Install HDF5 development libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libhdf5-dev
+
+      - name: Build
+        env:
+          CGO_CFLAGS: "-I/usr/include/hdf5/serial"
+          CGO_LDFLAGS: "-L/usr/lib/x86_64-linux-gnu/hdf5/serial"
+        run: |
+          make
+          make test
+          tar cvfz gonexus.tar.gz srv*
 
     - name: Set up QEMU
       uses: docker/setup-qemu-action@v3

@@ -10,19 +10,29 @@ on:
     branches: [ "main" ]
 
 jobs:
-
   build:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+      - uses: actions/checkout@v3
 
-    - name: Set up Go
-      uses: actions/setup-go@v4
-      with:
-        go-version: '1.27'
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.27'
 
-    - name: Build
-      run: make
+      - name: Install HDF5 development libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libhdf5-dev
 
-    - name: Test
-      run: make test
+      - name: Build
+        env:
+          CGO_CFLAGS: "-I/usr/include/hdf5/serial"
+          CGO_LDFLAGS: "-L/usr/lib/x86_64-linux-gnu/hdf5/serial"
+        run: make
+
+      - name: Test
+        env:
+          CGO_CFLAGS: "-I/usr/include/hdf5/serial"
+          CGO_LDFLAGS: "-L/usr/lib/x86_64-linux-gnu/hdf5/serial"
+        run: make test
